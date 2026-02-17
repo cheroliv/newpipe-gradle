@@ -6,3 +6,4 @@ doc.adoc
 src/main/resources/site.yml
 src/test/resources/local.properties
 local.properties
+doc
