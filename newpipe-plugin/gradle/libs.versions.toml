@@ -1,0 +1,58 @@
+[versions]
+newpipe = "0.0.0"
+commons-io = "2.13.0"
+slf4j = "2.0.17"
+kotlin = "2.2.20"
+junit-platform-launcher = "1.10.2"
+mockito-kotlin = "5.3.1"
+mockito-jupiter = "5.12.0"
+gradle = "9.3.0"
+assertj = "3.27.6"
+plugin-publish = "1.3.1"
+cucumber = "7.33.0"
+junit_platform = "1.14.2"
+jackson = "2.21.0"
+coroutines = "1.10.2"
+
+[libraries]
+kotlin-stdlib-jdk8 = { group = "org.jetbrains.kotlin", name = "kotlin-stdlib-jdk8" }
+kotlin-test-junit5 = { group = "org.jetbrains.kotlin", name = "kotlin-test-junit5", version.ref = "kotlin" }
+assertj-core = { group = "org.assertj", name = "assertj-core", version.ref = "assertj" }
+mockito-kotlin = { group = "org.mockito.kotlin", name = "mockito-kotlin", version.ref = "mockito-kotlin" }
+mockito-junit-jupiter = { group = "org.mockito", name = "mockito-junit-jupiter", version.ref = "mockito-jupiter" }
+commons-io = { group = "commons-io", name = "commons-io", version.ref = "commons-io" }
+gradle-tooling-api = { group = "org.gradle", name = "gradle-tooling-api", version.ref = "gradle" }
+cucumber-java = { module = "io.cucumber:cucumber-java", version.ref = "cucumber" }
+cucumber-junit-platform-engine = { module = "io.cucumber:cucumber-junit-platform-engine", version.ref = "cucumber" }
+cucumber-picocontainer = { module = "io.cucumber:cucumber-picocontainer", version.ref = "cucumber" }
+junit-platform-suite = { module = "org.junit.platform:junit-platform-suite", version.ref = "junit_platform" }
+jackson-module-kotlin = { module = "com.fasterxml.jackson.module:jackson-module-kotlin", version.ref = "jackson" }
+jackson-dataformat-yaml = { module = "com.fasterxml.jackson.dataformat:jackson-dataformat-yaml", version.ref = "jackson" }
+#TODO: migrate to tools.jackson
+#    implementation("tools.jackson.module:jackson-module-kotlin:3.0.4")
+#    implementation("tools.jackson.dataformat:jackson-dataformat-yaml:3.0.4")
+kotlinx-coroutines-core = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-core", version.ref = "coroutines" }
+kotlinx-coroutines-jdk8 = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-jdk8", version.ref = "coroutines" }
+kotlinx-coroutines-test = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-test", version.ref = "coroutines" }
+
+[plugins]
+kotlin-jvm = { id = "org.jetbrains.kotlin.jvm", version.ref = "kotlin" }
+newpipe = { id = "com.cheroliv.newpipe", version.ref = "newpipe" }
+publish = { id = "com.gradle.plugin-publish", version.ref = "plugin-publish" }
+
+[bundles]
+newpipe = [
+    "jackson-module-kotlin",
+    "jackson-dataformat-yaml"
+]
+cucumber = [
+    "cucumber-java",
+    "cucumber-junit-platform-engine",
+    "cucumber-picocontainer",
+    "junit-platform-suite"
+]
+coroutines = [
+    "kotlinx-coroutines-core",
+    "kotlinx-coroutines-jdk8",
+    "kotlinx-coroutines-test"
+]

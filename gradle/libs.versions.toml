@@ -1,0 +1,9 @@
+[versions]
+#newpipe = "0.0.0"
+#
+[libraries]
+#
+[plugins]
+#newpipe = { id = "com.cheroliv.newpipe", version.ref = "newpipe" }
+#
+[bundles]
