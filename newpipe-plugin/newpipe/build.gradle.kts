@@ -22,9 +22,7 @@ repositories {
 dependencies {
     implementation(kotlin("stdlib-jdk8"))
 
-//    api(libs.bundles.jbake)
-//    api(libs.bundles.jgit)
-//    api(libs.commons.io)
+    api(libs.bundles.newpipe)
 
     // Coroutines - IMPORTANT pour les tests asynchrones
     testImplementation(libs.bundles.coroutines)
