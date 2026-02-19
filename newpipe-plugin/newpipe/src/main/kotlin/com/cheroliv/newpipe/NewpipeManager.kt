@@ -1,5 +1,4 @@
-//package com.cheroliv.bakery
-//
+package com.cheroliv.newpipe
 //import com.cheroliv.bakery.ConfigPrompts.getOrPrompt
 //import com.cheroliv.bakery.ConfigPrompts.saveConfiguration
 //import com.cheroliv.bakery.FileSystemManager.copyResourceDirectory
@@ -19,9 +18,9 @@
 //import java.io.File.separator
 //import kotlin.text.Charsets.UTF_8
 //
-//object SiteManager {
-//
-//    const val BAKERY_GROUP = "bakery"
+object NewpipeManager {
+
+    const val BAKERY_GROUP = "newpipe"
 //    const val BAKE_TASK = "bake"
 //    const val ASCIIDOCTOR_OPTION_REQUIRES = "asciidoctor.option.requires"
 //    const val ASCIIDOCTOR_DIAGRAM = "asciidoctor-diagram"
@@ -329,4 +328,4 @@
 //    }
 //
 //
-//}
+}
