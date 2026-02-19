@@ -2,7 +2,7 @@ package com.cheroliv.newpipe
 
 //import com.cheroliv.bakery.FileSystemManager.from
 //import com.cheroliv.bakery.FileSystemManager.yamlMapper
-import com.cheroliv.newpipe.NewpipeManager.BAKERY_GROUP
+import com.cheroliv.newpipe.NewpipeManager.NEWPIPE_GROUP
 //import com.cheroliv.bakery.SiteManager.configureBakeTask
 //import com.cheroliv.bakery.SiteManager.configureConfigPath
 //import com.cheroliv.bakery.SiteManager.configureJBakePlugin
@@ -21,7 +21,7 @@ class DownloaderPlugin : Plugin<Project> {
 
     override fun apply(project: Project) {
         val newpipeExtension = project.extensions.create(
-            BAKERY_GROUP,
+            NEWPIPE_GROUP,
             NewpipeExtension::class.java
         )
 //        val jbakeRuntime = project.createJBakeRuntimeConfiguration()
