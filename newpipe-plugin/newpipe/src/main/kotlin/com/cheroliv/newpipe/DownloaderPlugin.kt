@@ -35,5 +35,13 @@ class DownloaderPlugin : Plugin<Project> {
                     .run(yamlMapper::readValue)
             )
         }
+        project.tasks.register(
+            "downloadMusic",
+            DownloadMusicTask::class.java
+        ) {
+            // Configuration par défaut si besoin
+            it.outputPath = "${project.projectDir}/downloads"
+        }
+
     }
 }
