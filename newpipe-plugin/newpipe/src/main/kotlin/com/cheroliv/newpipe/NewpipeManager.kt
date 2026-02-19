@@ -20,7 +20,7 @@ package com.cheroliv.newpipe
 //
 object NewpipeManager {
 
-    const val BAKERY_GROUP = "newpipe"
+    const val NEWPIPE_GROUP = "newpipe"
 //    const val BAKE_TASK = "bake"
 //    const val ASCIIDOCTOR_OPTION_REQUIRES = "asciidoctor.option.requires"
 //    const val ASCIIDOCTOR_DIAGRAM = "asciidoctor-diagram"
@@ -65,7 +65,7 @@ object NewpipeManager {
 //    fun Project.registerInitSiteTask() {
 //        tasks.register("initSite") { task ->
 //            task.apply {
-//                group = BAKERY_GROUP
+//                group = NEWPIPE_GROUP
 //                description = "Initialise site and maquette folders."
 //
 //                doLast {
@@ -161,7 +161,7 @@ object NewpipeManager {
 //    internal fun Project.registerPublishSiteTask(site: SiteConfiguration) {
 //        tasks.register("publishSite") { task ->
 //            task.apply {
-//                group = BAKERY_GROUP
+//                group = NEWPIPE_GROUP
 //                description = "Publish site online."
 //                dependsOn(BAKE_TASK)
 //
@@ -184,7 +184,7 @@ object NewpipeManager {
 //    internal fun Project.registerPublishMaquetteTask(site: SiteConfiguration) {
 //        tasks.register("publishMaquette") { task ->
 //            task.apply {
-//                group = BAKERY_GROUP
+//                group = NEWPIPE_GROUP
 //                description = "Publish maquette online."
 //                doFirst { prepareAndCopyMaquette(site) }
 //                doLast { publishMaquetteToPages(site) }
@@ -242,7 +242,7 @@ object NewpipeManager {
 //    ) {
 //        tasks.register("serve", JavaExec::class.java) { task ->
 //            task.apply {
-//                group = BAKERY_GROUP
+//                group = NEWPIPE_GROUP
 //                description = "Serves the baked site locally."
 //                mainClass.set("org.jbake.launcher.Main")
 //                classpath = jbakeRuntime
@@ -277,7 +277,7 @@ object NewpipeManager {
 //    ) {
 //        tasks.register("configureSite") { task ->
 //            task.apply {
-//                group = BAKERY_GROUP
+//                group = NEWPIPE_GROUP
 //                description = "Initialize Bakery configuration."
 //
 //                doLast {
