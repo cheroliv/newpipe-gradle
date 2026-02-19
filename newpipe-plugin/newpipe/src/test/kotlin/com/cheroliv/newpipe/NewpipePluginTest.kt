@@ -1,4 +1,7 @@
-//package com.cheroliv.bakery
+package com.cheroliv.newpipe
+
+import kotlin.test.Test
+
 //
 //import com.cheroliv.bakery.FileSystemManager.createCnameFile
 //import com.cheroliv.bakery.FileSystemManager.yamlMapper
@@ -32,7 +35,9 @@
 //import java.util.*
 //import kotlin.text.Charsets.UTF_8
 //
-//class BakeryPluginTest {
+class NewpipePluginTest {
+    @Test
+    fun hackToTest() = Unit
 //
 //    private fun createMockProject(): Pair<Project, PluginContainer> {
 //        // Create all mocks first to avoid nested mock creation issues
@@ -633,4 +638,4 @@
 //            assertThat(cnameFile.readText(UTF_8)).isEqualTo("another.cheroliv.com")
 //        }
 //    }
-//}
+}
