@@ -88,8 +88,7 @@ class TestWorld {
      */
     fun createGradleProject(configFileName: String = "musics.yml"): File {
         val pluginId = "com.cheroliv.newpipe"
-//        val buildScriptContent = "newpipe { configPath = file(\"$configFileName\").absolutePath }"
-        val buildScriptContent = ""
+        val buildScriptContent = "newpipe { configPath = file(\"$configFileName\").absolutePath }"
         createTempFile("gradle-test-", "").apply {
             delete()
             mkdirs()
