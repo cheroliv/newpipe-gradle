@@ -1,11 +1,14 @@
 @file:Suppress("UnstableApiUsage")
 
+import org.gradle.kotlin.dsl.maven
+
+
 pluginManagement {
     repositories {
         mavenLocal()
         gradlePluginPortal()
         mavenCentral()
-        google()
+        maven { url = uri("https://jitpack.io") }
     }
 }
 
@@ -13,7 +16,7 @@ dependencyResolutionManagement {
     repositories {
         mavenLocal()
         mavenCentral()
-        google()
+        maven { url = uri("https://jitpack.io") }
     }
 }
 
