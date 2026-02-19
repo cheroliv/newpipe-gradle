@@ -2,7 +2,7 @@ package com.cheroliv.newpipe
 
 //import com.cheroliv.bakery.FileSystemManager.from
 //import com.cheroliv.bakery.FileSystemManager.yamlMapper
-//import com.cheroliv.bakery.SiteManager.BAKERY_GROUP
+import com.cheroliv.newpipe.NewpipeManager.BAKERY_GROUP
 //import com.cheroliv.bakery.SiteManager.configureBakeTask
 //import com.cheroliv.bakery.SiteManager.configureConfigPath
 //import com.cheroliv.bakery.SiteManager.configureJBakePlugin
@@ -20,11 +20,11 @@ import org.gradle.api.Project
 class DownloaderPlugin : Plugin<Project> {
 
     override fun apply(project: Project) {
+        val newpipeExtension = project.extensions.create(
+            BAKERY_GROUP,
+            NewpipeExtension::class.java
+        )
 //        val jbakeRuntime = project.createJBakeRuntimeConfiguration()
-//        val bakeryExtension = project.extensions.create(
-//            BAKERY_GROUP,
-//            BakeryExtension::class.java
-//        )
 //        val isGradlePropertiesEnabled = bakeryExtension.configPath.isPresent
 //
 //        project.afterEvaluate {
