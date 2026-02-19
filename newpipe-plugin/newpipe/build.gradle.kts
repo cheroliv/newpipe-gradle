@@ -17,6 +17,7 @@ kotlin.jvmToolchain(JavaVersion.VERSION_24.ordinal)
 repositories {
     mavenCentral()
     gradlePluginPortal()
+    maven { url = uri("https://jitpack.io") }
 }
 
 dependencies {
@@ -25,7 +26,7 @@ dependencies {
     api(libs.bundles.newpipe)
 
     // Coroutines - IMPORTANT pour les tests asynchrones
-    testImplementation(libs.bundles.coroutines)
+    implementation(libs.bundles.coroutines)
 
     testImplementation(kotlin("test-junit5"))
     testRuntimeOnly("org.junit.platform:junit-platform-launcher")
@@ -237,6 +238,12 @@ publishing {
                         connection.set(gradlePlugin.vcsUrl.get())
                         developerConnection.set(gradlePlugin.vcsUrl.get())
                         url.set(gradlePlugin.vcsUrl.get())
+                    }
+                    repositories {
+                        maven {
+                            name = "Jitpack"
+                            url = uri("https://jitpack.io")
+                        }
                     }
                 }
             }
