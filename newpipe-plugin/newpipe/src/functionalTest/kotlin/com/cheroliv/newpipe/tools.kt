@@ -1,8 +1,11 @@
-//package com.cheroliv.bakery
+package com.cheroliv.newpipe
+
 //
 //import com.cheroliv.bakery.BakeryPluginFunctionalTests.Companion.VERSION
 //import com.cheroliv.bakery.FuncTestsConstants.BUILD_FILE_PATH
-//import com.cheroliv.bakery.FuncTestsConstants.CONFIG_FILE
+import com.cheroliv.newpipe.FuncTestsConstants.CONFIG_FILE
+import java.io.File
+
 //import com.cheroliv.bakery.FuncTestsConstants.CONFIG_PATH
 //import com.cheroliv.bakery.FuncTestsConstants.GRADLE_DIR
 //import com.cheroliv.bakery.FuncTestsConstants.LIBS_VERSIONS_TOML_FILE
@@ -16,7 +19,25 @@
 //import java.io.File
 //import java.io.File.separator
 //import java.io.IOException
-//import kotlin.text.Charsets.UTF_8
+import kotlin.text.Charsets.UTF_8
+
+fun File.createConfigFile() {
+    val content = """
+        artistes:
+          - name: "Amine La Colombe"
+            tunes:
+              - "https://www.youtube.com/watch?v=FzzEaLVEr-k"
+          - name: "Cheb Omar"
+            playlists:
+              - "https://www.youtube.com/watch?v=SOV6F_AXzRI&list=RDEMkdRT82xA368-J0oQtZ063A&start_radio=1"
+
+    """.trimIndent()
+    val configFile = resolve(CONFIG_FILE)
+    if (configFile.exists()) configFile.delete()
+    else configFile.createNewFile()
+    configFile.writeText(content, UTF_8)
+}
+
 //
 //
 //fun File.createBuildScriptFile() {
@@ -61,16 +82,12 @@
 //    tomlFile.writeText(DEPS.trimIndent(), UTF_8)
 //}
 //
-//fun File.createConfigFile() {
-//    val configFile = File("").absoluteFile.parentFile?.parentFile?.resolve(CONFIG_FILE)
-//    configFile?.copyTo(resolve(CONFIG_FILE), true)
-//}
 //
-//object FuncTestsConstants {
-//    const val BAKERY_GROUP = "bakery"
+object FuncTestsConstants {
+    //    const val BAKERY_GROUP = "bakery"
 //    const val BAKE_TASK = "bake"
 //    const val CNAME = "CNAME"
-//    const val CONFIG_FILE = "site.yml"
+    const val CONFIG_FILE = "musics.yml"
 //    const val GRADLE_PROPERTIES_FILE = "site.yml"
 //    const val BUILD_FILE = "build.gradle.kts"
 //    const val SETTINGS_FILE = "settings.gradle.kts"
@@ -330,4 +347,4 @@
 //        .describedAs("toml file should contains dependencies")
 //        .contains(tomlListOfStringContained)
 //
-//}
+}
