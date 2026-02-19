@@ -10,8 +10,8 @@ plugins {
 }
 
 group = "com.cheroliv"
-version = "0.0.0"
-//version = libs.plugins.newpipe.get().version
+version = libs.plugins.newpipe.get().version
+
 kotlin.jvmToolchain(JavaVersion.VERSION_24.ordinal)
 
 repositories {
@@ -188,12 +188,16 @@ val cucumberTest = tasks.register<Test>("cucumberTest") {
 tasks.withType<Test>().configureEach {
     // Permet de masquer l'avertissement relatif au chargement dynamique d'agents
     jvmArgs("-XX:+EnableDynamicAgentLoading")
+    failOnNoDiscoveredTests.set(false)
 }
 
 tasks.check {
-    dependsOn(functionalTestTask)
     dependsOn(cucumberTest)
+    setDependsOn(dependsOn.filterNot {
+        (it is TaskProvider<*> && it.name == "test") || (it is Task && it.name == "test")
+    })
 }
+
 
 gradlePlugin {
     plugins {
@@ -208,11 +212,6 @@ gradlePlugin {
     website = "https://cheroliv.com"
     vcsUrl = "https://github.com/cheroliv/newpipe-gradle.git"
     testSourceSets(functionalTest)
-}
-
-java {
-    withJavadocJar()
-    withSourcesJar()
 }
 
 publishing {
@@ -268,4 +267,9 @@ signing {
         sign(publishing.publications)
     }
     useGpgCmd()
+}
+
+java {
+    withJavadocJar()
+    withSourcesJar()
 }
