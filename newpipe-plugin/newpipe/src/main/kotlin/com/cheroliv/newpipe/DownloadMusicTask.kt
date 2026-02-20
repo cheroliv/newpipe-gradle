@@ -46,17 +46,11 @@ open class DownloadMusicTask : DefaultTask() {
             throw GradleException("L'URL YouTube est requise. Utilisez: --url=<youtube-url>")
         }
 
-        // Déterminer le dossier de sortie
-        val outputDir = if (outputPath.isNotBlank()) File(outputPath)
+        // Dossier racine de sortie (le sous-dossier artiste sera créé plus tard)
+        val baseOutputDir = if (outputPath.isNotBlank()) File(outputPath)
         else File(project.projectDir, "downloads")
 
-        // Création du dossier de sortie
-        if (!outputDir.exists()) {
-            outputDir.mkdirs()
-            logger.info("Dossier créé: ${outputDir.absolutePath}")
-        }
-
-        printHeader(url, outputDir)
+        printHeader(url, baseOutputDir)
 
         val downloader = YouTubeDownloader()
         val converter = Mp3Converter()
@@ -75,6 +69,16 @@ open class DownloadMusicTask : DefaultTask() {
                 logger.info("✓ Artiste: $artist")
                 logger.info("✓ Durée: ${formatDuration(duration)}")
 
+                // Création du dossier artiste (downloads/<NomArtiste>/)
+                // YouTube suffixe automatiquement les chaînes musicales avec " - Topic"
+                val cleanArtist = artist.removeSuffix(" - Topic").trim()
+                val sanitizedArtist = downloader.sanitizeFileName(cleanArtist)
+                val artistDir = File(baseOutputDir, sanitizedArtist)
+                if (!artistDir.exists()) {
+                    artistDir.mkdirs()
+                    logger.info("Dossier artiste créé: ${artistDir.absolutePath}")
+                }
+
                 // Étape 2: Sélection du flux audio
                 logger.info("\n[2/4] Sélection du meilleur flux audio...")
                 val audioStream = downloader.getBestAudioStream(videoInfo)
@@ -85,7 +89,7 @@ open class DownloadMusicTask : DefaultTask() {
                 logger.info("\n[3/4] Téléchargement de l'audio...")
 
                 val sanitizedTitle = downloader.sanitizeFileName(title)
-                val tempFile = File(outputDir, "${sanitizedTitle}_temp.${audioStream.format?.suffix ?: "m4a"}")
+                val tempFile = File(artistDir, "${sanitizedTitle}_temp.${audioStream.format?.suffix ?: "m4a"}")
 
                 var lastPrintedPercent = 0
                 downloader.downloadAudio(audioStream, tempFile) { downloaded, total, percent ->
@@ -101,7 +105,7 @@ open class DownloadMusicTask : DefaultTask() {
                 // Étape 4: Conversion en MP3 et ajout des métadonnées
                 logger.info("\n[4/4] Conversion en MP3 et ajout des métadonnées...")
 
-                val mp3File = File(outputDir, "${sanitizedTitle}.mp3")
+                val mp3File = File(artistDir, "${sanitizedTitle}.mp3")
                 converter.convertToMp3(tempFile, mp3File, bitrate = "192k")
 
                 // Ajout des métadonnées
@@ -109,7 +113,7 @@ open class DownloadMusicTask : DefaultTask() {
                 converter.addMetadata(
                     mp3File = mp3File,
                     title = title,
-                    artist = artist,
+                    artist = cleanArtist,
                     album = "YouTube",
                     thumbnailUrl = thumbnailUrl
                 )
