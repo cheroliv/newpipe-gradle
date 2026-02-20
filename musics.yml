@@ -1,5 +1,6 @@
 artistes:
-  - name: "Amine La Colombe"
+  #  - name: "Amine La Colombe"
+  - name: "Mohamed Bousmaha"
     tunes:
       - "https://www.youtube.com/watch?v=FzzEaLVEr-k"
   - name: "Cheb Nadir"
