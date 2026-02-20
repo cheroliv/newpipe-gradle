@@ -1,3 +1,5 @@
+@file:Suppress("unused")
+
 package com.cheroliv.newpipe
 
 import com.cheroliv.newpipe.NewpipeManager.CONFIG_PATH_EXCEPTION_MESSAGE
@@ -27,21 +29,16 @@ class DownloaderPlugin : Plugin<Project> {
                         throw Exception(CONFIG_PATH_EXCEPTION_MESSAGE)
                 }
             project.registerDownloadTask(
-                project
-                    .layout
-                    .projectDirectory
-                    .asFile
-                    .resolve(newpipeExtension.configPath.get())
-                    .run(yamlMapper::readValue)
+                newpipeExtension,
+                yamlMapper.readValue(
+                    project
+                        .layout
+                        .projectDirectory
+                        .asFile
+                        .resolve(newpipeExtension.configPath.get())
+                )
+
             )
         }
-        project.tasks.register(
-            "downloadMusic",
-            DownloadMusicTask::class.java
-        ) {
-            // Configuration par défaut si besoin
-            it.outputPath = "${project.projectDir}/downloads"
-        }
-
     }
 }

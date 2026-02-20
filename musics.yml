@@ -1,4 +1,7 @@
 artistes:
+  - name: "Amine La Colombe"
+    tunes:
+      - "https://www.youtube.com/watch?v=FzzEaLVEr-k"
   - name: "Cheb Nadir"
     playlists:
       - "https://www.youtube.com/watch?v=-5rs4IarrAE&list=PL_klhD1YeZ05AKm8K12xZU5Df-sKvk8YY"
@@ -48,10 +51,6 @@ artistes:
   - name: "Cheb Khaled"
     playlists:
       - "https://www.youtube.com/watch?v=5dWeeUIZFgA&list=RDEMtbC_BXEtvKp9p_L81bzVwA&start_radio=1"
-
-  - name: "Amine La Colombe"
-    tunes:
-      - "https://www.youtube.com/watch?v=FzzEaLVEr-k"
 
   - name: "Cheb Omar"
     playlists:
