@@ -28,24 +28,21 @@ class DownloaderImpl private constructor() : Downloader() {
     }
     
     override fun execute(request: NewPipeRequest): NewPipeResponse {
+        val requestBody: RequestBody? = if (request.httpMethod() == "POST" && request.dataToSend() == null) {
+            // For POST requests with no data, provide an empty request body
+            RequestBody.create(null, ByteArray(0))
+        } else {
+            request.dataToSend()?.let { data -> RequestBody.create(null, data) }
+        }
+
         val requestBuilder = Request.Builder()
             .url(request.url())
-            .method(request.httpMethod(), null)
+            .method(request.httpMethod(), requestBody)
         
         // Ajout des headers
         request.headers().forEach { (key, values) ->
             values.forEach { value ->
                 requestBuilder.addHeader(key, value)
-            }
-        }
-        
-        // Ajout du body si présent
-        request.dataToSend()?.let { data ->
-            val body = RequestBody.create(null, data)
-            when (request.httpMethod()) {
-                "POST" -> requestBuilder.post(body)
-                "PUT" -> requestBuilder.put(body)
-                else -> {}
             }
         }
         
