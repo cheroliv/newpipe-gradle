@@ -6,56 +6,55 @@ artistes:
   - name: "Cheb Nadir"
     playlists:
       - "https://www.youtube.com/watch?v=-5rs4IarrAE&list=PL_klhD1YeZ05AKm8K12xZU5Df-sKvk8YY"
-  - name: "Cheb Bello"
-    playlists:
-      - "https://www.youtube.com/watch?v=u81C6NASQ-Q&list=RDEMJR9zAbDDzeAWIj4eotDRDQ&start_radio=1"
-  - name: "Bilal Sghir"
-    playlists:
-      - "https://www.youtube.com/watch?v=5V0K5TWJ0YY&list=RDEM1fNix6mkVZI7AVyhoQzkCg&start_radio=1"
-  - name: "Cheb Midou"
-    playlists:
-      - "https://www.youtube.com/watch?v=mwnfRWSYsYE&list=RDEM4YsxhqL7kKOrQre2s5nGzg&start_radio=1"
+#  - name: "Cheb Bello"
+#    playlists:
+#      - "https://www.youtube.com/watch?v=u81C6NASQ-Q&list=RDEMJR9zAbDDzeAWIj4eotDRDQ&start_radio=1"
+#  - name: "Bilal Sghir"
+#    playlists:
+#      - "https://www.youtube.com/watch?v=5V0K5TWJ0YY&list=RDEM1fNix6mkVZI7AVyhoQzkCg&start_radio=1"
+#  - name: "Cheb Midou"
+#    playlists:
+#      - "https://www.youtube.com/watch?v=mwnfRWSYsYE&list=RDEM4YsxhqL7kKOrQre2s5nGzg&start_radio=1"
   - name: "Cheb Lotfi"
     playlists:
       - "https://www.youtube.com/watch?v=7_cv3sOC28I&list=PLwHh_R-V7CCjvEhMuTo3lHMYgIhteFhs0"
-  - name: "Silya Ziani"
-    playlists:
-      - "https://www.youtube.com/watch?v=-zR1VLkncj8&list=RDEMC6MzRayF0CW4QaDp8AZBOw&start_radio=1"
-  - name: "Rachid Kasmi"
-    playlists:
-      - "https://www.youtube.com/watch?v=a_OCNYlOu24&list=RDEMQuedLvncw8PYIOZsIDM9gA&start_radio=1"
-  - name: "Cheb Zehouani"
-    playlists:
-      - "https://www.youtube.com/watch?v=kNTu8k7Rrg8&list=RDEM4TW7oMSY7SXnJlEA7mKoeg&start_radio=1"
-  - name: "Bilel Tachini"
-    playlists:
-      - "https://www.youtube.com/watch?v=UQpgU6SUXJU&list=RDEMhZ6Oy2MMZavrtslLaitfhQ&start_radio=1"
-  - name: "Cheba Zahouania"
-    playlists:
-      - "https://www.youtube.com/watch?v=oQgX-fQfMJE&list=RDEMMvRQDTNKKKYlCqxWPBtY2A&start_radio=1"
+#  - name: "Silya Ziani"
+#    playlists:
+#      - "https://www.youtube.com/watch?v=-zR1VLkncj8&list=RDEMC6MzRayF0CW4QaDp8AZBOw&start_radio=1"
+#  - name: "Rachid Kasmi"
+#    playlists:
+#      - "https://www.youtube.com/watch?v=a_OCNYlOu24&list=RDEMQuedLvncw8PYIOZsIDM9gA&start_radio=1"
+#  - name: "Cheb Zehouani"
+#    playlists:
+#      - "https://www.youtube.com/watch?v=kNTu8k7Rrg8&list=RDEM4TW7oMSY7SXnJlEA7mKoeg&start_radio=1"
+#  - name: "Bilel Tachini"
+#    playlists:
+#      - "https://www.youtube.com/watch?v=UQpgU6SUXJU&list=RDEMhZ6Oy2MMZavrtslLaitfhQ&start_radio=1"
+#  - name: "Cheba Zahouania"
+#    playlists:
+#      - "https://www.youtube.com/watch?v=oQgX-fQfMJE&list=RDEMMvRQDTNKKKYlCqxWPBtY2A&start_radio=1"
   - name: "Djamel Sghir"
     playlists:
       - "https://www.youtube.com/watch?v=RtjRazd1zVY&list=OLAK5uy_lUaJ9mohowixPTKV-fvnTydJzMmssj-4U"
-
-  - name: "Cheb Mimou"
-    playlists:
-      - "https://www.youtube.com/watch?v=fIPQYQJjVmM&list=RDEMKfe_HkGUnGVsBDsHEhhEyg&start_radio=1"
-
-  - name: "Cheb Hasni"
-    playlists:
-      - "https://www.youtube.com/watch?v=NQjxUPqgSKE&list=RDEMlVEieg9F2qg5_K4vWvQqtQ&start_radio=1"
-
+#
+#  - name: "Cheb Mimou"
+#    playlists:
+#      - "https://www.youtube.com/watch?v=fIPQYQJjVmM&list=RDEMKfe_HkGUnGVsBDsHEhhEyg&start_radio=1"
+#
+#  - name: "Cheb Hasni"
+#    playlists:
+#      - "https://www.youtube.com/watch?v=NQjxUPqgSKE&list=RDEMlVEieg9F2qg5_K4vWvQqtQ&start_radio=1"
+#
   - name: "Cheb Mami"
     playlists:
       - "https://www.youtube.com/watch?v=4Lk6b-1HR1o&list=PLehZ-vuP969TCvgy1Nf0YkMmMqxALxDCp"
 
-  - name: "Cheb Khaled"
-    playlists:
-      - "https://www.youtube.com/watch?v=5dWeeUIZFgA&list=RDEMtbC_BXEtvKp9p_L81bzVwA&start_radio=1"
-
-  - name: "Cheb Omar"
-    playlists:
-      - "https://www.youtube.com/watch?v=SOV6F_AXzRI&list=RDEMkdRT82xA368-J0oQtZ063A&start_radio=1"
+#  - name: "Cheb Khaled"
+#    playlists:
+#      - "https://www.youtube.com/watch?v=5dWeeUIZFgA&list=RDEMtbC_BXEtvKp9p_L81bzVwA&start_radio=1"
+#  - name: "Cheb Omar"
+#    playlists:
+#      - "https://www.youtube.com/watch?v=SOV6F_AXzRI&list=RDEMkdRT82xA368-J0oQtZ063A&start_radio=1"
 
 #  - name: "Mamine"
 #
