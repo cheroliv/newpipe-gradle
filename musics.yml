@@ -141,7 +141,8 @@ artistes:
   - name: "Bilal Sghir"
     tunes:
       - "https://www.youtube.com/watch?v=iuid_jkoowY"
-
+    playlists:
+      - "https://www.youtube.com/watch?v=5V0K5TWJ0YY&list=RDEM1fNix6mkVZI7AVyhoQzkCg&start_radio=1"
   - name: "Zina Daoudia"
     tunes:
       - "https://www.youtube.com/watch?v=yA2LAqFAqV4"
@@ -171,9 +172,7 @@ artistes:
 
 
 
-#  - name: "Bilal Sghir"
-#    playlists:
-#      - "https://www.youtube.com/watch?v=5V0K5TWJ0YY&list=RDEM1fNix6mkVZI7AVyhoQzkCg&start_radio=1"
+
 #  - name: "Cheb Midou"
 #    playlists:
 #      - "https://www.youtube.com/watch?v=mwnfRWSYsYE&list=RDEM4YsxhqL7kKOrQre2s5nGzg&start_radio=1"
