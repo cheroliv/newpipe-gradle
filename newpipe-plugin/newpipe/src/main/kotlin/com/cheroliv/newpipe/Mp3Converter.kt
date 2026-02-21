@@ -8,8 +8,9 @@ import org.jaudiotagger.tag.images.Artwork
 import org.jaudiotagger.tag.images.ArtworkFactory
 import org.slf4j.LoggerFactory
 import java.io.File
-import java.net.URL
+import java.net.URI
 import java.time.Year
+import kotlin.math.abs
 
 /**
  * Handles audio conversion to MP3 and ID3 metadata tagging.
@@ -18,6 +19,66 @@ class Mp3Converter {
 
     private val logger = LoggerFactory.getLogger(Mp3Converter::class.java)
 
+    // ------------------------------------------------------------------
+    // Duplicate detection
+    // ------------------------------------------------------------------
+
+    /**
+     * Returns true if [mp3File] already exists and its ID3 tags + audio duration
+     * match the given [title], [artist] and [youtubeDurationSeconds].
+     *
+     * Duration comparison uses a ±[toleranceSeconds] window to absorb minor
+     * discrepancies between YouTube metadata and the actual encoded audio length.
+     */
+    fun alreadyDownloaded(
+        mp3File: File,
+        title: String,
+        artist: String,
+        youtubeDurationSeconds: Long,
+        toleranceSeconds: Long = 2L
+    ): Boolean {
+        if (!mp3File.exists()) return false
+
+        return try {
+            val audioFile = AudioFileIO.read(mp3File)
+            val tag = audioFile.tag ?: return false
+            val header = audioFile.audioHeader
+
+            val tagTitle  = tag.getFirst(FieldKey.TITLE).orEmpty().trim()
+            val tagArtist = tag.getFirst(FieldKey.ARTIST).orEmpty().trim()
+            val tagDuration = header.trackLength.toLong() // seconds
+
+            val titlesMatch  = tagTitle.equals(title.trim(), ignoreCase = true)
+            val artistsMatch = tagArtist.equals(artist.trim(), ignoreCase = true)
+            val durationsMatch = abs(tagDuration - youtubeDurationSeconds) <= toleranceSeconds
+
+            if (titlesMatch && artistsMatch && durationsMatch) {
+                logger.info(
+                    "⏭ Skipping already downloaded track: " +
+                            "\"$tagTitle\" by $tagArtist (${tagDuration}s)"
+                )
+                true
+            } else {
+                // Log which fields differ to help diagnose unexpected re-downloads
+                if (!titlesMatch)  logger.debug("Title mismatch: tag=\"$tagTitle\" vs youtube=\"$title\"")
+                if (!artistsMatch) logger.debug("Artist mismatch: tag=\"$tagArtist\" vs youtube=\"$artist\"")
+                if (!durationsMatch) logger.debug(
+                    "Duration mismatch: tag=${tagDuration}s vs youtube=${youtubeDurationSeconds}s " +
+                            "(tolerance ±${toleranceSeconds}s)"
+                )
+                false
+            }
+        } catch (e: Exception) {
+            // If we cannot read the file, treat it as not downloaded so it gets replaced
+            logger.warn("Could not read existing MP3 tags for ${mp3File.name}: ${e.message}")
+            false
+        }
+    }
+
+    // ------------------------------------------------------------------
+    // Conversion
+    // ------------------------------------------------------------------
+
     /**
      * Converts an audio file to MP3 using FFmpeg.
      * Falls back to a plain copy if FFmpeg is not available on the system.
@@ -25,8 +86,7 @@ class Mp3Converter {
     suspend fun convertToMp3(
         inputFile: File,
         outputFile: File,
-        bitrate: String = "192k",
-        onProgress: (percent: Int) -> Unit = {}
+        bitrate: String = "192k"
     ): File = withContext(Dispatchers.IO) {
         logger.info("Converting to MP3: ${inputFile.name} -> ${outputFile.name}")
 
@@ -37,15 +97,14 @@ class Mp3Converter {
                 return@withContext outputFile
             }
 
-            // FFmpeg command for MP3 conversion
             val command = listOf(
                 "ffmpeg",
                 "-i", inputFile.absolutePath,
-                "-vn",          // strip video
-                "-ar", "44100", // sample rate
-                "-ac", "2",     // stereo
+                "-vn",
+                "-ar", "44100",
+                "-ac", "2",
                 "-b:a", bitrate,
-                "-y",           // overwrite output
+                "-y",
                 outputFile.absolutePath
             )
 
@@ -53,19 +112,15 @@ class Mp3Converter {
                 .redirectErrorStream(true)
                 .start()
 
-            // Read FFmpeg output to track progress
             val output = StringBuilder()
             process.inputStream.bufferedReader().use { reader ->
                 reader.lineSequence().forEach { line ->
                     output.append(line).append("\n")
-                    if (line.contains("time=")) {
-                        logger.debug(line)
-                    }
+                    if (line.contains("time=")) logger.debug(line)
                 }
             }
 
             val exitCode = process.waitFor()
-
             if (exitCode != 0) {
                 logger.error("FFmpeg exited with code: $exitCode")
                 logger.error("FFmpeg output: $output")
@@ -74,7 +129,6 @@ class Mp3Converter {
 
             logger.info("MP3 conversion successful: ${outputFile.length() / 1024 / 1024} MB")
 
-            // Remove the source temp file
             if (inputFile.exists() && inputFile != outputFile) {
                 inputFile.delete()
                 logger.debug("Temp file deleted: ${inputFile.name}")
@@ -86,6 +140,10 @@ class Mp3Converter {
             throw ConversionException("Failed to convert to MP3", e)
         }
     }
+
+    // ------------------------------------------------------------------
+    // Metadata
+    // ------------------------------------------------------------------
 
     /**
      * Writes ID3 tags to an MP3 file (title, artist, album, year, cover art).
@@ -104,19 +162,15 @@ class Mp3Converter {
             val audioFile = AudioFileIO.read(mp3File)
             val tag = audioFile.tagOrCreateAndSetDefault
 
-            title?.let { tag.setField(FieldKey.TITLE, it) }
+            title?.let  { tag.setField(FieldKey.TITLE, it) }
             artist?.let { tag.setField(FieldKey.ARTIST, it) }
-            album?.let { tag.setField(FieldKey.ALBUM, it) }
+            album?.let  { tag.setField(FieldKey.ALBUM, it) }
             tag.setField(FieldKey.YEAR, Year.now().toString())
 
-            // Download and embed cover art if available
             thumbnailUrl?.let { url ->
                 try {
-                    val artwork = downloadThumbnail(url)
-                    artwork?.let {
-                        tag.setField(artwork)
-                        logger.info("Cover art embedded successfully")
-                    }
+                    downloadThumbnail(url)?.let { tag.setField(it) }
+                    logger.info("Cover art embedded successfully")
                 } catch (e: Exception) {
                     logger.warn("Could not embed cover art: ${e.message}")
                 }
@@ -127,17 +181,17 @@ class Mp3Converter {
             mp3File
         } catch (e: Exception) {
             logger.error("Failed to write metadata: ${e.message}", e)
-            // Non-fatal: return the file even without tags
             mp3File
         }
     }
 
-    /**
-     * Downloads a thumbnail image and wraps it as an [Artwork] object.
-     */
+    // ------------------------------------------------------------------
+    // Private helpers
+    // ------------------------------------------------------------------
+
     private fun downloadThumbnail(url: String): Artwork? {
         return try {
-            val connection = URL(url).openConnection()
+            val connection = url.run(::URI).toURL().openConnection()
             connection.connect()
             val imageData = connection.getInputStream().readBytes()
             ArtworkFactory.createArtworkFromFile(
@@ -152,16 +206,13 @@ class Mp3Converter {
         }
     }
 
-    /**
-     * Returns true if FFmpeg is installed and accessible on the system PATH.
-     */
     private fun isFFmpegAvailable(): Boolean {
         return try {
-            val process = ProcessBuilder("ffmpeg", "-version")
+            ProcessBuilder("ffmpeg", "-version")
                 .redirectErrorStream(true)
                 .start()
-            process.waitFor() == 0
-        } catch (e: Exception) {
+                .waitFor() == 0
+        } catch (_: Exception) {
             false
         }
     }
