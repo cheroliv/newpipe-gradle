@@ -1,7 +1,7 @@
 package com.cheroliv.newpipe
 
 import com.cheroliv.newpipe.NewpipeManager.REGEX_CLEAN_TUNE_NAME
-import kotlinx.coroutines.Dispatchers.IO
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import okhttp3.Request
 import org.schabi.newpipe.extractor.NewPipe
@@ -38,7 +38,7 @@ class YouTubeDownloader : VideoInfoProvider {
         NewPipe.init(DownloaderImpl.getInstance())
     }
 
-    override suspend fun getVideoInfo(url: String): VideoMetadata = withContext(IO) {
+    override suspend fun getVideoInfo(url: String): VideoMetadata = withContext(Dispatchers.IO) {
         logger.info("Extracting video information for: $url")
         try {
             val extractor = ServiceList.YouTube.getStreamExtractor(url) as YoutubeStreamExtractor
@@ -48,11 +48,11 @@ class YouTubeDownloader : VideoInfoProvider {
             logger.info("Uploader: ${streamInfo.uploaderName}")
             logger.info("Duration: ${streamInfo.duration} seconds")
             VideoMetadata(
-                title = streamInfo.name,
+                title        = streamInfo.name,
                 uploaderName = streamInfo.uploaderName,
-                duration = streamInfo.duration,
-                url = streamInfo.url,
-                streamInfo = streamInfo
+                duration     = streamInfo.duration,
+                url          = streamInfo.url,
+                streamInfo   = streamInfo
             )
         } catch (e: Exception) {
             logger.error("Failed to extract video information: ${e.message}", e)
@@ -61,10 +61,18 @@ class YouTubeDownloader : VideoInfoProvider {
     }
 
     override suspend fun getPlaylistVideoUrls(playlistUrl: String): List<String> =
-        withContext(IO) {
+        withContext(Dispatchers.IO) {
+            // YouTube Mix Radio URLs (list=RD..., RDAMEM..., RDAMVM...) are dynamically
+            // generated queues — NewPipe Extractor cannot enumerate their content.
+            // We extract only the seed video (v= parameter) and download that instead.
+            extractMixSeedVideoUrl(playlistUrl)?.let { seedUrl ->
+                logger.warn("Mix Radio URL detected — only the seed video will be downloaded: $seedUrl")
+                return@withContext listOf(seedUrl)
+            }
+
             logger.info("Fetching playlist: $playlistUrl")
             try {
-                val service = ServiceList.YouTube
+                val service   = ServiceList.YouTube
                 val extractor = service.getPlaylistExtractor(playlistUrl)
                 extractor.fetchPage()
 
@@ -73,12 +81,20 @@ class YouTubeDownloader : VideoInfoProvider {
                 val firstPage = PlaylistInfo.getInfo(extractor)
                 items += firstPage.relatedItems.filterIsInstance<StreamInfoItem>()
 
-                var nextPage = firstPage.nextPage
-                while (nextPage != null) {
-                    logger.info("Fetching next playlist page...")
+                var nextPage  = firstPage.nextPage
+                var pageCount = 0
+                val maxPages  = 50 // safety cap against infinite dynamic playlists
+
+                while (nextPage != null && pageCount < maxPages) {
+                    pageCount++
+                    logger.info("Fetching playlist page $pageCount...")
                     val moreItems = PlaylistInfo.getMoreItems(service, playlistUrl, nextPage)
                     items += moreItems.items.filterIsInstance<StreamInfoItem>()
                     nextPage = moreItems.nextPage
+                }
+
+                if (pageCount >= maxPages) {
+                    logger.warn("Reached page cap ($maxPages) — playlist may be truncated or is a dynamic Mix that slipped through detection")
                 }
 
                 val urls = items.map { it.url }
@@ -90,11 +106,48 @@ class YouTubeDownloader : VideoInfoProvider {
             }
         }
 
+    /**
+     * Detects YouTube Mix Radio URLs whose list parameter starts with "RD"
+     * (e.g. RDAMVM, RDAMEM, RDEM, RDAMVMxxx...) and extracts the seed video URL.
+     *
+     * Uses [java.net.URL] rather than [java.net.URI] — URL is more permissive
+     * and won't throw on query strings that contain unencoded characters.
+     *
+     * Returns null for regular playlists so normal extraction proceeds.
+     */
+    private fun extractMixSeedVideoUrl(url: String): String? {
+        return try {
+            // Split on ? to isolate the query string, then parse key=value pairs
+            val query  = url.substringAfter("?", missingDelimiterValue = "")
+            if (query.isBlank()) return null
+
+            val params = query.split("&")
+                .mapNotNull { pair ->
+                    val key   = pair.substringBefore("=")
+                    val value = pair.substringAfter("=", missingDelimiterValue = "")
+                    if (key.isNotBlank()) key to value else null
+                }
+                .toMap()
+
+            val listParam  = params["list"] ?: return null
+            val videoParam = params["v"]
+
+            logger.debug("Mix detection — list=$listParam, v=$videoParam")
+
+            if (listParam.startsWith("RD") && videoParam != null) {
+                "https://www.youtube.com/watch?v=$videoParam"
+            } else null
+        } catch (e: Exception) {
+            logger.debug("Mix detection failed for $url: ${e.message}")
+            null
+        }
+    }
+
     override suspend fun downloadBestAudio(
         metadata: VideoMetadata,
         outputFile: File,
         onProgress: (downloaded: Long, total: Long, percent: Int) -> Unit
-    ): File = withContext(IO) {
+    ): File = withContext(Dispatchers.IO) {
         val streamInfo = metadata.streamInfo
             ?: throw DownloadException("No StreamInfo available — cannot download audio")
 
@@ -114,9 +167,9 @@ class YouTubeDownloader : VideoInfoProvider {
             httpClient.newCall(request).execute().use { response ->
                 if (!response.isSuccessful) throw DownloadException("Download request failed: ${response.code}")
 
-                val totalBytes = response.body.contentLength()
+                val totalBytes     = response.body.contentLength()
                 var downloadedBytes = 0L
-                var lastPercent = 0
+                var lastPercent    = 0
 
                 response.body.byteStream().use { input ->
                     // BufferedOutputStream avoids per-chunk syscalls to the kernel
