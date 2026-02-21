@@ -1,3 +1,0 @@
-= Newpipe Gradle Plugin
-
-URL: https://github.com/cheroliv/newpipe-gradle[newpipe-gradle]
