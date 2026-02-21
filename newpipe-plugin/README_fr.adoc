@@ -1,0 +1,307 @@
+= newpipe-plugin
+:toc: left
+:toc-title: Sommaire
+:toclevels: 3
+:icons: font
+:source-highlighter: highlight.js
+:hardbreaks-option:
+
+image:https://img.shields.io/badge/Kotlin-2.x-7F52FF?logo=kotlin[Kotlin]
+image:https://img.shields.io/badge/Gradle-8.x-02303A?logo=gradle[Gradle]
+image:https://img.shields.io/badge/JitPack-published-brightgreen[JitPack]
+image:https://img.shields.io/badge/License-Apache%202.0-blue.svg[License]
+
+Plugin Gradle (`com.cheroliv.newpipe`) qui télécharge de la musique depuis
+YouTube et la convertit en MP3 — sans dépendance Python, en pur JVM.
+
+== Proposition de valeur
+
+Dans un écosystème JVM, intégrer `yt-dlp` impose Python, `pip` et la gestion
+de versions Python entre machines et agents CI. Ce plugin élimine cette
+friction : une seule dépendance Gradle, zéro outil système obligatoire en
+dehors de FFmpeg (ou Docker).
+
+== Architecture
+
+=== Vue d'ensemble
+
+[source,text]
+----
+newpipe-plugin/
+└── newpipe/
+    └── src/
+        ├── main/kotlin/com/cheroliv/newpipe/
+        │   ├── DownloaderPlugin.kt      Plugin entry point
+        │   ├── NewpipeExtension.kt      DSL extension (configPath)
+        │   ├── NewpipeManager.kt        Task registration + YAML parsing
+        │   ├── Models.kt                Selection / Artist data classes
+        │   ├── DownloadMusicTask.kt     Tâche Gradle principale
+        │   ├── VideoServices.kt         Interfaces VideoInfoProvider / AudioConverter
+        │   ├── VideoMetadata.kt         Data class découplée de StreamInfo
+        │   ├── YouTubeDownloader.kt     Implémentation réelle (NewPipe + OkHttp)
+        │   ├── Mp3Converter.kt          Implémentation réelle (FFmpeg + jaudiotagger)
+        │   └── DownloaderImpl.kt        NewPipe Downloader (OkHttp singleton)
+        └── test/kotlin/com/cheroliv/newpipe/
+            ├── FakeVideoInfoProvider.kt Fake sans réseau pour les tests
+            ├── FakeAudioConverter.kt    Fake sans FFmpeg pour les tests
+            └── scenarios/              Tests Cucumber (GradleTestKit)
+----
+
+=== Flux d'exécution
+
+[source,text]
+----
+musics.yml
+    │
+    ▼
+NewpipeManager.registerDownloadTask()
+    │  parse YAML → Selection → tuneEntries + playlistUrls
+    ▼
+DownloadMusicTask.download()
+    │
+    ├── Résolution des playlists (séquentielle)
+    │     └── VideoInfoProvider.getPlaylistVideoUrls()
+    │           ├── Mix Radio (list=RD...) → première page seulement (~15 pistes)
+    │           └── Playlist standard     → toutes les pages (cap 50)
+    │
+    └── Pipeline concurrent (Semaphore 3) pour chaque URL
+          │
+          ├── Phase 1 — fetchAudio()
+          │     ├── VideoInfoProvider.getVideoInfo()   → VideoMetadata
+          │     ├── AudioConverter.alreadyDownloaded() → skip si doublon
+          │     └── VideoInfoProvider.downloadBestAudio() → _temp.m4a
+          │
+          └── Phase 2 — convertTrack() (inline, dès que le download finit)
+                ├── AudioConverter.convertToMp3()     → FFmpeg 192k
+                └── AudioConverter.addMetadata()      → tags ID3 + cover
+----
+
+== Composants principaux
+
+=== VideoInfoProvider / AudioConverter
+
+Deux interfaces permettent de substituer les implémentations réelles par des
+fakes en test sans franchir la frontière JVM de GradleTestKit.
+
+[source,kotlin]
+----
+interface VideoInfoProvider {
+    suspend fun getVideoInfo(url: String): VideoMetadata
+    suspend fun getPlaylistVideoUrls(playlistUrl: String): List<String>
+    suspend fun downloadBestAudio(
+        metadata: VideoMetadata,
+        outputFile: File,
+        onProgress: (downloaded: Long, total: Long, percent: Int) -> Unit
+    ): File
+    fun sanitizeFileName(name: String): String
+}
+
+interface AudioConverter {
+    fun alreadyDownloaded(mp3File: File, title: String, artist: String,
+                          youtubeDurationSeconds: Long, toleranceSeconds: Long = 2L): Boolean
+    suspend fun convertToMp3(inputFile: File, outputFile: File, bitrate: String = "192k"): File
+    suspend fun addMetadata(mp3File: File, title: String?, artist: String?,
+                            album: String?, thumbnailUrl: String?): File
+}
+----
+
+=== VideoMetadata
+
+Data class propre qui découple le plugin de `StreamInfo` de NewPipe Extractor
+(classe `final` non instanciable de l'extérieur).
+
+[source,kotlin]
+----
+data class VideoMetadata(
+    val title: String,
+    val uploaderName: String,
+    val duration: Long,
+    val url: String,
+    val streamInfo: StreamInfo? = null  // null en mode test
+)
+----
+
+=== DownloadMusicTask — concurrence
+
+Les téléchargements sont concurrents (max 3 simultanés via `Semaphore`).
+La conversion FFmpeg démarre immédiatement après chaque téléchargement dans
+la même coroutine — les fichiers `_temp.m4a` ne s'accumulent pas.
+
+[source,kotlin]
+----
+val semaphore = Semaphore(MAX_CONCURRENT_DOWNLOADS) // = 3
+
+allEntries.map { (artistHint, tuneUrl) ->
+    async(Dispatchers.IO) {
+        semaphore.withPermit {
+            val track = fetchAudio(tuneUrl, artistHint, baseOutputDir, label)
+            convertTrack(converter, track)  // conversion immédiate
+        }
+    }
+}.awaitAll()
+----
+
+=== DownloaderImpl — OkHttp singleton
+
+Un seul `OkHttpClient` est partagé entre l'extraction des métadonnées
+(NewPipe Extractor) et le téléchargement audio — évitant les doubles
+négociations TCP/TLS et la multiplication des pools de threads.
+
+[source,kotlin]
+----
+companion object {
+    val httpClient: OkHttpClient = OkHttpClient.Builder()
+        .connectTimeout(30, TimeUnit.SECONDS)
+        .readTimeout(60, TimeUnit.SECONDS)
+        .writeTimeout(30, TimeUnit.SECONDS)
+        .build()
+}
+----
+
+Le buffer de téléchargement est de 128 Ko pour minimiser les appels système.
+
+== Stratégie de test
+
+=== Problème
+
+GradleTestKit exécute le plugin dans une JVM séparée — Mockito ne peut pas
+franchir cette frontière. Les vrais téléchargements YouTube + FFmpeg rendent
+les tests Cucumber lents (2+ minutes par scénario).
+
+=== Solution — system property + fakes
+
+[source,kotlin]
+----
+// DownloadMusicTask.kt
+companion object {
+    const val MOCK_PROPERTY = "newpipe.test.mock"
+}
+
+private fun newInfoProvider(): VideoInfoProvider =
+    if (System.getProperty(MOCK_PROPERTY) == "true") FakeVideoInfoProvider()
+    else YouTubeDownloader()
+----
+
+[source,kotlin]
+----
+// TestWorld.kt — le flag est passé automatiquement à GradleRunner
+.withArguments(tasks + "--stacktrace" + "-D${DownloadMusicTask.MOCK_PROPERTY}=true")
+----
+
+Les fakes (`FakeVideoInfoProvider`, `FakeAudioConverter`) retournent des
+données fixes instantanément — aucun appel réseau, aucun FFmpeg. Les tests
+vérifient la structure des dossiers, le nommage des fichiers, le skip des
+doublons et la gestion des erreurs en moins d'une seconde par scénario.
+
+=== Lancer les tests
+
+[source,bash]
+----
+# Tests Cucumber uniquement
+./gradlew cucumberTest
+
+# Tous les tests
+./gradlew check
+----
+
+== Dépendances
+
+[cols="2,1,2", options="header"]
+|===
+| Dépendance | Version | Rôle
+
+| `com.github.TeamNewPipe:NewPipeExtractor`
+| `dev` branch
+| Extraction YouTube (métadonnées + flux audio)
+
+| `com.squareup.okhttp3:okhttp`
+| 4.x
+| Client HTTP (partagé entre extraction et téléchargement)
+
+| `org.jaudiotagger:jaudiotagger`
+| 2.x
+| Écriture des tags ID3 et cover art
+
+| `com.fasterxml.jackson.dataformat:jackson-dataformat-yaml`
+| 2.x
+| Parsing de `musics.yml`
+
+| `org.jetbrains.kotlinx:kotlinx-coroutines-core`
+| 1.x
+| Concurrence (async/await, Semaphore, Dispatchers.IO)
+|===
+
+[NOTE]
+====
+NewPipe Extractor est résolu via https://jitpack.io[JitPack]. La version
+pointe sur la branche `dev` plutôt que sur une release taggée pour bénéficier
+des derniers correctifs anti-throttling YouTube.
+====
+
+== Build et publication
+
+=== Pré-requis
+
+[source,bash]
+----
+# Vérifier la version Java
+java -version  # >= 24
+----
+
+=== Build local
+
+[source,bash]
+----
+cd newpipe-plugin
+./gradlew build
+----
+
+=== Publication en local (pour tests consommateur)
+
+[source,bash]
+----
+./gradlew publishToMavenLocal
+----
+
+=== Publication Maven Central
+
+La publication requiert des credentials Sonatype et une clé GPG configurés
+dans `~/.gradle/gradle.properties` :
+
+[source,properties]
+----
+ossrhUsername=<votre-username>
+ossrhPassword=<votre-password>
+----
+
+[source,bash]
+----
+./gradlew publish
+----
+
+Les releases signées sont automatiquement publiées sur Maven Central.
+Les SNAPSHOT sont publiés sur le dépôt snapshot Sonatype.
+
+== Problèmes connus
+
+=== Throttling YouTube
+
+YouTube applique un throttling aux clients non officiels via le paramètre `n`
+de l'URL de flux. C'est une course-poursuite entre YouTube et NewPipe
+Extractor. En cas de lenteur anormale sur une connexion fibre, bumper la
+dépendance vers le dernier commit `dev` de NewPipe Extractor est la première
+action à entreprendre.
+
+=== Mix Radio (list=RD...)
+
+Les playlists Mix Radio sont générées dynamiquement par YouTube et ne peuvent
+pas être paginées. Le plugin récupère la première page (~15 pistes) et
+s'arrête. La pagination complète n'est pas possible sans l'API officielle
+YouTube.
+
+== Feuille de route
+
+* [ ] Support FFmpeg via Docker (zéro dépendance système)
+* [ ] Configurer l'image Docker via le DSL (`ffmpegDockerImage`)
+* [ ] Tests d'intégration taggés `@integration` (vrais téléchargements, CI nightly)
+* [ ] Rapport de téléchargement en fin de tâche (résumé JSON/HTML)
