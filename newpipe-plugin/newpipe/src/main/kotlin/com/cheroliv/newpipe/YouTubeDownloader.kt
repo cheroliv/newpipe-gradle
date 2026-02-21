@@ -48,11 +48,11 @@ class YouTubeDownloader : VideoInfoProvider {
             logger.info("Uploader: ${streamInfo.uploaderName}")
             logger.info("Duration: ${streamInfo.duration} seconds")
             VideoMetadata(
-                title        = streamInfo.name,
+                title = streamInfo.name,
                 uploaderName = streamInfo.uploaderName,
-                duration     = streamInfo.duration,
-                url          = streamInfo.url,
-                streamInfo   = streamInfo
+                duration = streamInfo.duration,
+                url = streamInfo.url,
+                streamInfo = streamInfo
             )
         } catch (e: Exception) {
             logger.error("Failed to extract video information: ${e.message}", e)
@@ -62,17 +62,11 @@ class YouTubeDownloader : VideoInfoProvider {
 
     override suspend fun getPlaylistVideoUrls(playlistUrl: String): List<String> =
         withContext(Dispatchers.IO) {
-            // YouTube Mix Radio URLs (list=RD..., RDAMEM..., RDAMVM...) are dynamically
-            // generated queues — NewPipe Extractor cannot enumerate their content.
-            // We extract only the seed video (v= parameter) and download that instead.
-            extractMixSeedVideoUrl(playlistUrl)?.let { seedUrl ->
-                logger.warn("Mix Radio URL detected — only the seed video will be downloaded: $seedUrl")
-                return@withContext listOf(seedUrl)
-            }
+            val isMix = isMixRadioUrl(playlistUrl)
 
-            logger.info("Fetching playlist: $playlistUrl")
+            logger.info("Fetching ${if (isMix) "Mix Radio" else "playlist"}: $playlistUrl")
             try {
-                val service   = ServiceList.YouTube
+                val service = ServiceList.YouTube
                 val extractor = service.getPlaylistExtractor(playlistUrl)
                 extractor.fetchPage()
 
@@ -81,24 +75,30 @@ class YouTubeDownloader : VideoInfoProvider {
                 val firstPage = PlaylistInfo.getInfo(extractor)
                 items += firstPage.relatedItems.filterIsInstance<StreamInfoItem>()
 
-                var nextPage  = firstPage.nextPage
-                var pageCount = 0
-                val maxPages  = 50 // safety cap against infinite dynamic playlists
+                if (isMix) {
+                    // Mix Radio playlists are dynamically generated and infinite —
+                    // the first page already contains ~15 tracks, which is enough.
+                    logger.info("Mix Radio: using first page only (${items.size} track(s))")
+                } else {
+                    var nextPage = firstPage.nextPage
+                    var pageCount = 0
+                    val maxPages = 50
 
-                while (nextPage != null && pageCount < maxPages) {
-                    pageCount++
-                    logger.info("Fetching playlist page $pageCount...")
-                    val moreItems = PlaylistInfo.getMoreItems(service, playlistUrl, nextPage)
-                    items += moreItems.items.filterIsInstance<StreamInfoItem>()
-                    nextPage = moreItems.nextPage
-                }
+                    while (nextPage != null && pageCount < maxPages) {
+                        pageCount++
+                        logger.info("Fetching playlist page $pageCount...")
+                        val moreItems = PlaylistInfo.getMoreItems(service, playlistUrl, nextPage)
+                        items += moreItems.items.filterIsInstance<StreamInfoItem>()
+                        nextPage = moreItems.nextPage
+                    }
 
-                if (pageCount >= maxPages) {
-                    logger.warn("Reached page cap ($maxPages) — playlist may be truncated or is a dynamic Mix that slipped through detection")
+                    if (pageCount >= maxPages) {
+                        logger.warn("Reached page cap ($maxPages) — playlist truncated")
+                    }
                 }
 
                 val urls = items.map { it.url }
-                logger.info("Playlist contains ${urls.size} video(s)")
+                logger.info("Found ${urls.size} video(s)")
                 urls
             } catch (e: Exception) {
                 logger.error("Failed to fetch playlist: ${e.message}", e)
@@ -107,39 +107,26 @@ class YouTubeDownloader : VideoInfoProvider {
         }
 
     /**
-     * Detects YouTube Mix Radio URLs whose list parameter starts with "RD"
-     * (e.g. RDAMVM, RDAMEM, RDEM, RDAMVMxxx...) and extracts the seed video URL.
-     *
-     * Uses [java.net.URL] rather than [java.net.URI] — URL is more permissive
-     * and won't throw on query strings that contain unencoded characters.
-     *
-     * Returns null for regular playlists so normal extraction proceeds.
+     * Returns true if the URL is a YouTube Mix Radio (list=RD...).
+     * Mix Radio playlists are dynamically generated — pagination is infinite
+     * so we only consume the first page.
      */
-    private fun extractMixSeedVideoUrl(url: String): String? {
+    private fun isMixRadioUrl(url: String): Boolean {
         return try {
-            // Split on ? to isolate the query string, then parse key=value pairs
-            val query  = url.substringAfter("?", missingDelimiterValue = "")
-            if (query.isBlank()) return null
-
+            val query = url.substringAfter("?", missingDelimiterValue = "")
+            if (query.isBlank()) return false
             val params = query.split("&")
                 .mapNotNull { pair ->
-                    val key   = pair.substringBefore("=")
+                    val key = pair.substringBefore("=")
                     val value = pair.substringAfter("=", missingDelimiterValue = "")
                     if (key.isNotBlank()) key to value else null
-                }
-                .toMap()
-
-            val listParam  = params["list"] ?: return null
-            val videoParam = params["v"]
-
-            logger.debug("Mix detection — list=$listParam, v=$videoParam")
-
-            if (listParam.startsWith("RD") && videoParam != null) {
-                "https://www.youtube.com/watch?v=$videoParam"
-            } else null
+                }.toMap()
+            val listParam = params["list"] ?: return false
+            logger.debug("Mix detection — list=$listParam")
+            listParam.startsWith("RD")
         } catch (e: Exception) {
             logger.debug("Mix detection failed for $url: ${e.message}")
-            null
+            false
         }
     }
 
@@ -167,9 +154,9 @@ class YouTubeDownloader : VideoInfoProvider {
             httpClient.newCall(request).execute().use { response ->
                 if (!response.isSuccessful) throw DownloadException("Download request failed: ${response.code}")
 
-                val totalBytes     = response.body.contentLength()
+                val totalBytes = response.body.contentLength()
                 var downloadedBytes = 0L
-                var lastPercent    = 0
+                var lastPercent = 0
 
                 response.body.byteStream().use { input ->
                     // BufferedOutputStream avoids per-chunk syscalls to the kernel
