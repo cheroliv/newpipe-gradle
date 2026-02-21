@@ -17,6 +17,7 @@ plugins { alias(libs.plugins.newpipe) }
 
 newpipe { configPath = file("musics.yml").absolutePath }
 """
+    const val REGEX_CLEAN_TUNE_NAME = "[^a-zA-Z0-9àâäéèêëïîôùûüÿçÀÂÄÉÈÊËÏÎÔÙÛÜŸÇ \\-_]"
 
     val yamlMapper: ObjectMapper
         get() = YAMLFactory()
