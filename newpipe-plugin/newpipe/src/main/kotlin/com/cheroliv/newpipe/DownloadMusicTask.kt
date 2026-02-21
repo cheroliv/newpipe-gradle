@@ -12,8 +12,8 @@ import org.slf4j.LoggerFactory
 import java.io.File
 
 /**
- * Tâche Gradle typée pour télécharger de la musique depuis YouTube
- * Usage: gradle downloadMusic --url=<youtube-url> [--output=<output-dir>]
+ * Typed Gradle task to download music from YouTube.
+ * Usage: gradle download --url=<youtube-url> [--output=<output-dir>]
  */
 open class DownloadMusicTask : DefaultTask() {
 
@@ -22,7 +22,7 @@ open class DownloadMusicTask : DefaultTask() {
     @get:Input
     @set:Option(
         option = "url",
-        description = "URL de la vidéo YouTube à télécharger"
+        description = "URL of the YouTube video to download"
     )
     var url: String = ""
 
@@ -30,7 +30,7 @@ open class DownloadMusicTask : DefaultTask() {
     @get:Optional
     @set:Option(
         option = "output",
-        description = "Dossier de destination pour le fichier MP3 (défaut: ./downloads)"
+        description = "Destination folder for the MP3 file (default: ./downloads)"
     )
     var outputPath: String = ""
 
@@ -41,12 +41,12 @@ open class DownloadMusicTask : DefaultTask() {
 
     @TaskAction
     fun download() {
-        // Validation de l'URL
+        // Validate URL
         if (url.isBlank()) {
-            throw GradleException("L'URL YouTube est requise. Utilisez: --url=<youtube-url>")
+            throw GradleException("YouTube URL is required. Use: --url=<youtube-url>")
         }
 
-        // Dossier racine de sortie (le sous-dossier artiste sera créé plus tard)
+        // Base output directory — the artist sub-folder will be created after fetching video info
         val baseOutputDir = if (outputPath.isNotBlank()) File(outputPath)
         else File(project.projectDir, "downloads")
 
@@ -57,36 +57,36 @@ open class DownloadMusicTask : DefaultTask() {
 
         runBlocking {
             try {
-                // Étape 1: Extraction des informations
-                logger.info("\n[1/4] Extraction des informations de la vidéo...")
+                // Step 1: Extract video information
+                logger.info("\n[1/4] Extracting video information...")
                 val videoInfo = downloader.getVideoInfo(url)
 
                 val title = videoInfo.name
                 val artist = videoInfo.uploaderName
                 val duration = videoInfo.duration
 
-                logger.info("✓ Titre: $title")
-                logger.info("✓ Artiste: $artist")
-                logger.info("✓ Durée: ${formatDuration(duration)}")
+                logger.info("✓ Title: $title")
+                logger.info("✓ Artist: $artist")
+                logger.info("✓ Duration: ${formatDuration(duration)}")
 
-                // Création du dossier artiste (downloads/<NomArtiste>/)
-                // YouTube suffixe automatiquement les chaînes musicales avec " - Topic"
+                // Create artist sub-folder (downloads/<ArtistName>/)
+                // YouTube automatically appends " - Topic" to auto-generated music channels
                 val cleanArtist = artist.removeSuffix(" - Topic").trim()
                 val sanitizedArtist = downloader.sanitizeFileName(cleanArtist)
                 val artistDir = File(baseOutputDir, sanitizedArtist)
                 if (!artistDir.exists()) {
                     artistDir.mkdirs()
-                    logger.info("Dossier artiste créé: ${artistDir.absolutePath}")
+                    logger.info("Artist directory created: ${artistDir.absolutePath}")
                 }
 
-                // Étape 2: Sélection du flux audio
-                logger.info("\n[2/4] Sélection du meilleur flux audio...")
+                // Step 2: Select best audio stream
+                logger.info("\n[2/4] Selecting best audio stream...")
                 val audioStream = downloader.getBestAudioStream(videoInfo)
-                logger.info("✓ Format: ${audioStream.format?.name ?: "inconnu"}")
+                logger.info("✓ Format: ${audioStream.format?.name ?: "unknown"}")
                 logger.info("✓ Bitrate: ${audioStream.averageBitrate} kbps")
 
-                // Étape 3: Téléchargement
-                logger.info("\n[3/4] Téléchargement de l'audio...")
+                // Step 3: Download audio
+                logger.info("\n[3/4] Downloading audio...")
 
                 val sanitizedTitle = downloader.sanitizeFileName(title)
                 val tempFile = File(artistDir, "${sanitizedTitle}_temp.${audioStream.format?.suffix ?: "m4a"}")
@@ -96,19 +96,19 @@ open class DownloadMusicTask : DefaultTask() {
                     if (percent >= lastPrintedPercent + 5) {
                         val downloadedMB = downloaded / 1024.0 / 1024.0
                         val totalMB = total / 1024.0 / 1024.0
-                        logger.info("  Progression: $percent%% (%.2f MB / %.2f MB)".format(downloadedMB, totalMB))
+                        logger.info("  Progress: $percent%% (%.2f MB / %.2f MB)".format(downloadedMB, totalMB))
                         lastPrintedPercent = percent
                     }
                 }
-                logger.info("✓ Téléchargement terminé: ${tempFile.length() / 1024 / 1024} MB")
+                logger.info("✓ Download complete: ${tempFile.length() / 1024 / 1024} MB")
 
-                // Étape 4: Conversion en MP3 et ajout des métadonnées
-                logger.info("\n[4/4] Conversion en MP3 et ajout des métadonnées...")
+                // Step 4: Convert to MP3 and add metadata
+                logger.info("\n[4/4] Converting to MP3 and adding metadata...")
 
                 val mp3File = File(artistDir, "${sanitizedTitle}.mp3")
                 converter.convertToMp3(tempFile, mp3File, bitrate = "192k")
 
-                // Ajout des métadonnées
+                // Add ID3 metadata tags
                 val thumbnailUrl = videoInfo.url
                 converter.addMetadata(
                     mp3File = mp3File,
@@ -118,12 +118,12 @@ open class DownloadMusicTask : DefaultTask() {
                     thumbnailUrl = thumbnailUrl
                 )
 
-                logger.info("✓ Conversion terminée")
+                logger.info("✓ Conversion complete")
                 printSuccess(mp3File)
 
             } catch (e: Exception) {
                 printError(e)
-                throw GradleException("Échec du téléchargement: ${e.message}", e)
+                throw GradleException("Download failed: ${e.message}", e)
             }
         }
     }
@@ -139,15 +139,15 @@ open class DownloadMusicTask : DefaultTask() {
 
     private fun printSuccess(mp3File: File) {
         logger.info("\n" + "=".repeat(60))
-        logger.info("✓ SUCCÈS!")
-        logger.info("Fichier: ${mp3File.absolutePath}")
-        logger.info("Taille: ${mp3File.length() / 1024 / 1024} MB")
+        logger.info("✓ SUCCESS!")
+        logger.info("File: ${mp3File.absolutePath}")
+        logger.info("Size: ${mp3File.length() / 1024 / 1024} MB")
         logger.info("=".repeat(60))
     }
 
     private fun printError(e: Exception) {
         logger.error("\n" + "=".repeat(60))
-        logger.error("✗ ERREUR: ${e.message}")
+        logger.error("✗ ERROR: ${e.message}")
         logger.error("=".repeat(60))
     }
 
