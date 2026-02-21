@@ -54,7 +54,7 @@ open class DownloadMusicTask : DefaultTask() {
     @get:Optional
     @set:Option(
         option = "url",
-        description = "Single YT URL to download (overrides the YAML config)"
+        description = "Single YouTube URL to download (overrides the YAML config)"
     )
     var url: String = ""
 
@@ -201,7 +201,12 @@ open class DownloadMusicTask : DefaultTask() {
             logger.info("✓ Artist folder: $artistName")
 
             val sanitizedArtist = infoProvider.sanitizeFileName(artistName)
-            val sanitizedTitle  = infoProvider.sanitizeFileName(metadata.title)
+            // If sanitizeFileName strips everything (e.g. title is only special characters),
+            // fall back to a minimal sanitization of the raw YouTube title — only filesystem
+            // forbidden characters are removed, everything else is kept as-is.
+            val sanitizedTitle = infoProvider.sanitizeFileName(metadata.title).ifBlank {
+                metadata.title.replace(Regex("[/\\\\:*?\"<>|]"), "_").trim()
+            }
 
             val artistDir = File(baseOutputDir, sanitizedArtist).also { it.mkdirs() }
             val mp3File   = File(artistDir, "$sanitizedArtist - $sanitizedTitle.mp3")
