@@ -15,8 +15,11 @@ import java.io.File
  * Gradle task that downloads every tune and playlist listed in the YAML config
  * and stores each MP3 under downloads/<ArtistName>/.
  *
- * For tunes  : the artist folder name comes from the YAML config.
+ * For tunes    : the artist folder name comes from the YAML config.
  * For playlists: the artist folder name comes from the YouTube video tag (uploader).
+ *
+ * In test mode ([MOCK_PROPERTY] = "true") real network calls and FFmpeg are
+ * replaced by [FakeVideoInfoProvider] and [FakeAudioConverter].
  *
  * CLI override (single video):
  *   gradle download --url=<youtube-url> [--output=<output-dir>]
@@ -24,6 +27,12 @@ import java.io.File
 open class DownloadMusicTask : DefaultTask() {
 
     private val logger = LoggerFactory.getLogger(DownloadMusicTask::class.java)
+
+    companion object {
+        /** System property that activates fake implementations in tests. */
+        const val MOCK_PROPERTY = "newpipe.test.mock"
+        private val isMockMode get() = System.getProperty(MOCK_PROPERTY) == "true"
+    }
 
     // ------------------------------------------------------------------
     // Properties injected by NewpipeManager
@@ -45,7 +54,7 @@ open class DownloadMusicTask : DefaultTask() {
     @get:Optional
     @set:Option(
         option = "url",
-        description = "Single YouTube URL to download (overrides the YAML config)"
+        description = "Single YT URL to download (overrides the YAML config)"
     )
     var url: String = ""
 
@@ -63,11 +72,23 @@ open class DownloadMusicTask : DefaultTask() {
     }
 
     // ------------------------------------------------------------------
+    // Dependency factories — swapped out in test mode
+    // ------------------------------------------------------------------
+
+    private fun newInfoProvider(): VideoInfoProvider =
+        if (isMockMode) FakeVideoInfoProvider() else YouTubeDownloader()
+
+    private fun newAudioConverter(): AudioConverter =
+        if (isMockMode) FakeAudioConverter() else Mp3Converter()
+
+    // ------------------------------------------------------------------
     // Task action
     // ------------------------------------------------------------------
 
     @TaskAction
     fun download() {
+        if (isMockMode) logger.info("*** Running in mock mode — no network calls will be made ***")
+
         val baseOutputDir = if (outputPath.isNotBlank()) File(outputPath)
         else File(project.projectDir, "downloads")
 
@@ -105,13 +126,13 @@ open class DownloadMusicTask : DefaultTask() {
             logger.info("Playlists — ${playlistUrls.size} playlist(s)")
             logger.info("=".repeat(60))
 
-            val downloader = YouTubeDownloader()
+            val infoProvider = newInfoProvider()
 
             playlistUrls.forEachIndexed { pIndex, playlistUrl ->
                 logger.info("\nPlaylist [${pIndex + 1}/${playlistUrls.size}]: $playlistUrl")
 
                 val videoUrls: List<String> = runCatching {
-                    runBlocking { downloader.getPlaylistVideoUrls(playlistUrl) }
+                    runBlocking { infoProvider.getPlaylistVideoUrls(playlistUrl) }
                 }.getOrElse { e ->
                     val msg = "Failed to fetch playlist $playlistUrl: ${e.message}"
                     logger.error(msg)
@@ -123,7 +144,6 @@ open class DownloadMusicTask : DefaultTask() {
 
                 videoUrls.forEachIndexed { vIndex, videoUrl ->
                     logger.info("\n  [${vIndex + 1}/${videoUrls.size}] $videoUrl")
-                    // No artistHint: folder name comes from the YouTube uploader tag
                     runCatching { downloadSingle(videoUrl, artistHint = null, baseOutputDir) }
                         .onFailure { e ->
                             val msg = "Failed (playlist video) $videoUrl: ${e.message}"
@@ -156,59 +176,47 @@ open class DownloadMusicTask : DefaultTask() {
     /**
      * Downloads one YouTube video URL and saves it as an MP3.
      *
-     * @param tuneUrl     YouTube video URL.
-     * @param artistHint  Artist name from the YAML config (tunes only).
-     *                    When null the YouTube uploader name is used (playlist videos).
+     * @param tuneUrl       YouTube video URL.
+     * @param artistHint    Artist name from the YAML config (tunes only).
+     *                      When null the YouTube uploader name is used (playlist videos).
      * @param baseOutputDir Root downloads directory.
      */
     private fun downloadSingle(tuneUrl: String, artistHint: String?, baseOutputDir: File) {
-        val downloader = YouTubeDownloader()
-        val converter = Mp3Converter()
+        val infoProvider  = newInfoProvider()
+        val audioConverter = newAudioConverter()
 
         runBlocking {
             // Step 1: Extract video information
             logger.info("[1/4] Extracting video information...")
-            val videoInfo = downloader.getVideoInfo(tuneUrl)
+            val metadata = infoProvider.getVideoInfo(tuneUrl)
 
-            val title        = videoInfo.name
-            val uploaderName = videoInfo.uploaderName
-            val duration     = videoInfo.duration
-
-            logger.info("✓ Title: $title")
-            logger.info("✓ Uploader: $uploaderName")
-            logger.info("✓ Duration: ${formatDuration(duration)}")
+            logger.info("✓ Title: ${metadata.title}")
+            logger.info("✓ Uploader: ${metadata.uploaderName}")
+            logger.info("✓ Duration: ${formatDuration(metadata.duration)}")
 
             // Resolve artist name:
-            //   - tunes         → YAML name (artistHint), strip " - Topic" just in case
+            //   - tunes           → YAML name (artistHint), strip " - Topic" just in case
             //   - playlist videos → YouTube uploader tag, strip " - Topic"
-            val artistName = (artistHint ?: uploaderName).removeSuffix(" - Topic").trim()
+            val artistName = (artistHint ?: metadata.uploaderName).removeSuffix(" - Topic").trim()
             logger.info("✓ Artist folder: $artistName")
 
-            val artistDir = File(baseOutputDir, downloader.sanitizeFileName(artistName))
-                .also { it.mkdirs() }
+            val sanitizedArtist = infoProvider.sanitizeFileName(artistName)
+            val sanitizedTitle  = infoProvider.sanitizeFileName(metadata.title)
 
-            val sanitizedArtist = downloader.sanitizeFileName(artistName)
-            val sanitizedTitle  = downloader.sanitizeFileName(title)
-            val mp3File = File(artistDir, "$sanitizedArtist - $sanitizedTitle.mp3")
+            val artistDir = File(baseOutputDir, sanitizedArtist).also { it.mkdirs() }
+            val mp3File   = File(artistDir, "$sanitizedArtist - $sanitizedTitle.mp3")
 
             // ── Duplicate check ────────────────────────────────────────
-            // Compare existing file tags (title, artist) and audio duration
-            // against YouTube metadata before touching the network any further.
-            if (converter.alreadyDownloaded(mp3File, title, artistName, duration)) {
+            if (audioConverter.alreadyDownloaded(mp3File, metadata.title, artistName, metadata.duration)) {
                 return@runBlocking
             }
 
-            // Step 2: Select best audio stream
-            logger.info("[2/4] Selecting best audio stream...")
-            val audioStream = downloader.getBestAudioStream(videoInfo)
-            logger.info("✓ Format: ${audioStream.format?.name ?: "unknown"}, ${audioStream.averageBitrate} kbps")
-
-            // Step 3: Download raw audio
-            logger.info("[3/4] Downloading audio...")
-            val tempFile = File(artistDir, "$sanitizedArtist - ${sanitizedTitle}_temp.${audioStream.format?.suffix ?: "m4a"}")
+            // Step 2 & 3: Select best stream and download raw audio
+            logger.info("[2/4] Selecting best audio stream and downloading...")
+            val tempFile = File(artistDir, "$sanitizedArtist - ${sanitizedTitle}_temp.m4a")
 
             var lastPercent = 0
-            downloader.downloadAudio(audioStream, tempFile) { downloaded, total, percent ->
+            infoProvider.downloadBestAudio(metadata, tempFile) { downloaded, total, percent ->
                 if (percent >= lastPercent + 5) {
                     logger.info("  Progress: $percent%% (%.2f / %.2f MB)".format(
                         downloaded / 1024.0 / 1024.0,
@@ -220,14 +228,14 @@ open class DownloadMusicTask : DefaultTask() {
             logger.info("✓ Download complete: ${tempFile.length() / 1024 / 1024} MB")
 
             // Step 4: Convert to MP3 and embed ID3 tags
-            logger.info("[4/4] Converting to MP3 and writing metadata...")
-            converter.convertToMp3(tempFile, mp3File, bitrate = "192k")
-            converter.addMetadata(
-                mp3File = mp3File,
-                title = title,
-                artist = artistName,
-                album = "YouTube",
-                thumbnailUrl = videoInfo.url
+            logger.info("[3/4] Converting to MP3 and writing metadata...")
+            audioConverter.convertToMp3(tempFile, mp3File, bitrate = "192k")
+            audioConverter.addMetadata(
+                mp3File      = mp3File,
+                title        = metadata.title,
+                artist       = artistName,
+                album        = "YouTube",
+                thumbnailUrl = metadata.url
             )
 
             logger.info("✓ Saved: ${mp3File.absolutePath}")
@@ -240,7 +248,7 @@ open class DownloadMusicTask : DefaultTask() {
 
     private fun formatDuration(seconds: Long): String {
         val minutes = seconds / 60
-        val secs = seconds % 60
+        val secs    = seconds % 60
         return "%02d:%02d".format(minutes, secs)
     }
 }
