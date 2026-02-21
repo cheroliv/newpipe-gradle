@@ -15,7 +15,7 @@ import kotlin.math.abs
 /**
  * Handles audio conversion to MP3 and ID3 metadata tagging.
  */
-class Mp3Converter {
+class Mp3Converter: AudioConverter {
 
     private val logger = LoggerFactory.getLogger(Mp3Converter::class.java)
 
@@ -30,12 +30,12 @@ class Mp3Converter {
      * Duration comparison uses a ±[toleranceSeconds] window to absorb minor
      * discrepancies between YouTube metadata and the actual encoded audio length.
      */
-    fun alreadyDownloaded(
+    override fun alreadyDownloaded(
         mp3File: File,
         title: String,
         artist: String,
         youtubeDurationSeconds: Long,
-        toleranceSeconds: Long = 2L
+        toleranceSeconds: Long
     ): Boolean {
         if (!mp3File.exists()) return false
 
@@ -83,10 +83,10 @@ class Mp3Converter {
      * Converts an audio file to MP3 using FFmpeg.
      * Falls back to a plain copy if FFmpeg is not available on the system.
      */
-    suspend fun convertToMp3(
+    override suspend fun convertToMp3(
         inputFile: File,
         outputFile: File,
-        bitrate: String = "192k"
+        bitrate: String
     ): File = withContext(Dispatchers.IO) {
         logger.info("Converting to MP3: ${inputFile.name} -> ${outputFile.name}")
 
@@ -149,12 +149,12 @@ class Mp3Converter {
      * Writes ID3 tags to an MP3 file (title, artist, album, year, cover art).
      * Errors during tagging are non-fatal — the file is returned as-is.
      */
-    suspend fun addMetadata(
+    override suspend fun addMetadata(
         mp3File: File,
         title: String?,
         artist: String?,
-        album: String? = null,
-        thumbnailUrl: String? = null
+        album: String?,
+        thumbnailUrl: String?
     ): File = withContext(Dispatchers.IO) {
         logger.info("Writing ID3 metadata to: ${mp3File.name}")
 
