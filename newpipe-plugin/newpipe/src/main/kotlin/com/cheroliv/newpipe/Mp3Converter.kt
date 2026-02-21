@@ -12,15 +12,15 @@ import java.net.URL
 import java.time.Year
 
 /**
- * Gère la conversion audio et l'ajout de métadonnées MP3
+ * Handles audio conversion to MP3 and ID3 metadata tagging.
  */
 class Mp3Converter {
-    
+
     private val logger = LoggerFactory.getLogger(Mp3Converter::class.java)
-    
+
     /**
-     * Convertit un fichier audio en MP3 en utilisant FFmpeg
-     * Note: FFmpeg doit être installé sur le système
+     * Converts an audio file to MP3 using FFmpeg.
+     * Falls back to a plain copy if FFmpeg is not available on the system.
      */
     suspend fun convertToMp3(
         inputFile: File,
@@ -28,71 +28,68 @@ class Mp3Converter {
         bitrate: String = "192k",
         onProgress: (percent: Int) -> Unit = {}
     ): File = withContext(Dispatchers.IO) {
-        logger.info("Conversion en MP3: ${inputFile.name} -> ${outputFile.name}")
-        
+        logger.info("Converting to MP3: ${inputFile.name} -> ${outputFile.name}")
+
         try {
-            // Vérifier si FFmpeg est disponible
             if (!isFFmpegAvailable()) {
-                logger.warn("FFmpeg non disponible, copie du fichier audio sans conversion")
+                logger.warn("FFmpeg not found — copying audio file without conversion")
                 inputFile.copyTo(outputFile, overwrite = true)
                 return@withContext outputFile
             }
-            
-            // Commande FFmpeg pour conversion MP3
+
+            // FFmpeg command for MP3 conversion
             val command = listOf(
                 "ffmpeg",
                 "-i", inputFile.absolutePath,
-                "-vn", // Pas de vidéo
-                "-ar", "44100", // Fréquence d'échantillonnage
-                "-ac", "2", // Stéréo
-                "-b:a", bitrate, // Bitrate
-                "-y", // Overwrite
+                "-vn",          // strip video
+                "-ar", "44100", // sample rate
+                "-ac", "2",     // stereo
+                "-b:a", bitrate,
+                "-y",           // overwrite output
                 outputFile.absolutePath
             )
-            
+
             val process = ProcessBuilder(command)
                 .redirectErrorStream(true)
                 .start()
-            
-            // Lecture de la sortie pour suivre la progression
+
+            // Read FFmpeg output to track progress
             val output = StringBuilder()
             process.inputStream.bufferedReader().use { reader ->
                 reader.lineSequence().forEach { line ->
                     output.append(line).append("\n")
-                    
-                    // Extraction de la progression (ex: "time=00:01:30.00")
                     if (line.contains("time=")) {
-                        // Parsing basique de la progression
                         logger.debug(line)
                     }
                 }
             }
-            
+
             val exitCode = process.waitFor()
-            
+
             if (exitCode != 0) {
-                logger.error("FFmpeg a échoué avec le code: $exitCode")
-                logger.error("Output: $output")
-                throw ConversionException("La conversion FFmpeg a échoué")
+                logger.error("FFmpeg exited with code: $exitCode")
+                logger.error("FFmpeg output: $output")
+                throw ConversionException("FFmpeg conversion failed")
             }
-            
-            logger.info("Conversion MP3 réussie: ${outputFile.length() / 1024 / 1024} MB")
-            
-            // Nettoyer le fichier source
+
+            logger.info("MP3 conversion successful: ${outputFile.length() / 1024 / 1024} MB")
+
+            // Remove the source temp file
             if (inputFile.exists() && inputFile != outputFile) {
                 inputFile.delete()
-                logger.debug("Fichier source supprimé: ${inputFile.name}")
+                logger.debug("Temp file deleted: ${inputFile.name}")
             }
-            
+
             outputFile
         } catch (e: Exception) {
-            logger.error("Erreur lors de la conversion: ${e.message}", e)
-            throw ConversionException("Échec de la conversion en MP3", e)
+            logger.error("Conversion error: ${e.message}", e)
+            throw ConversionException("Failed to convert to MP3", e)
         }
     }
-    
+
     /**
-     * Ajoute des métadonnées ID3 au fichier MP3
+     * Writes ID3 tags to an MP3 file (title, artist, album, year, cover art).
+     * Errors during tagging are non-fatal — the file is returned as-is.
      */
     suspend fun addMetadata(
         mp3File: File,
@@ -101,55 +98,48 @@ class Mp3Converter {
         album: String? = null,
         thumbnailUrl: String? = null
     ): File = withContext(Dispatchers.IO) {
-        logger.info("Ajout des métadonnées au fichier MP3")
-        
+        logger.info("Writing ID3 metadata to: ${mp3File.name}")
+
         try {
             val audioFile = AudioFileIO.read(mp3File)
             val tag = audioFile.tagOrCreateAndSetDefault
-            
-            // Ajout des métadonnées textuelles
+
             title?.let { tag.setField(FieldKey.TITLE, it) }
             artist?.let { tag.setField(FieldKey.ARTIST, it) }
             album?.let { tag.setField(FieldKey.ALBUM, it) }
-            
-            // Ajout de l'année courante
             tag.setField(FieldKey.YEAR, Year.now().toString())
-            
-            // Téléchargement et ajout de la vignette si disponible
+
+            // Download and embed cover art if available
             thumbnailUrl?.let { url ->
                 try {
                     val artwork = downloadThumbnail(url)
-                    artwork?.let { 
+                    artwork?.let {
                         tag.setField(artwork)
-                        logger.info("Vignette ajoutée avec succès")
+                        logger.info("Cover art embedded successfully")
                     }
                 } catch (e: Exception) {
-                    logger.warn("Impossible d'ajouter la vignette: ${e.message}")
+                    logger.warn("Could not embed cover art: ${e.message}")
                 }
             }
-            
-            // Sauvegarde des métadonnées
+
             audioFile.commit()
-            
-            logger.info("Métadonnées ajoutées: $title - $artist")
+            logger.info("Metadata written: $title — $artist")
             mp3File
         } catch (e: Exception) {
-            logger.error("Erreur lors de l'ajout des métadonnées: ${e.message}", e)
-            // Ne pas lever d'exception, retourner le fichier tel quel
+            logger.error("Failed to write metadata: ${e.message}", e)
+            // Non-fatal: return the file even without tags
             mp3File
         }
     }
-    
+
     /**
-     * Télécharge la vignette et la convertit en artwork
+     * Downloads a thumbnail image and wraps it as an [Artwork] object.
      */
     private fun downloadThumbnail(url: String): Artwork? {
         return try {
             val connection = URL(url).openConnection()
             connection.connect()
-            
             val imageData = connection.getInputStream().readBytes()
-            
             ArtworkFactory.createArtworkFromFile(
                 File.createTempFile("thumbnail", ".jpg").apply {
                     writeBytes(imageData)
@@ -157,22 +147,20 @@ class Mp3Converter {
                 }
             )
         } catch (e: Exception) {
-            logger.warn("Échec du téléchargement de la vignette: ${e.message}")
+            logger.warn("Thumbnail download failed: ${e.message}")
             null
         }
     }
-    
+
     /**
-     * Vérifie si FFmpeg est disponible sur le système
+     * Returns true if FFmpeg is installed and accessible on the system PATH.
      */
     private fun isFFmpegAvailable(): Boolean {
         return try {
             val process = ProcessBuilder("ffmpeg", "-version")
                 .redirectErrorStream(true)
                 .start()
-            
-            val exitCode = process.waitFor()
-            exitCode == 0
+            process.waitFor() == 0
         } catch (e: Exception) {
             false
         }
@@ -180,6 +168,6 @@ class Mp3Converter {
 }
 
 /**
- * Exception pour les erreurs de conversion
+ * Thrown when an audio conversion operation fails.
  */
 class ConversionException(message: String, cause: Throwable? = null) : Exception(message, cause)
