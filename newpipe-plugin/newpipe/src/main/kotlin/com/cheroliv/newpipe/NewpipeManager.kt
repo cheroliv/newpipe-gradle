@@ -31,6 +31,16 @@ newpipe { configPath = file("musics.yml").absolutePath }
         newpipeExtension: NewpipeExtension,
         selection: Selection
     ) {
+        // Flatten all tunes: (artistHint, url) — artistHint is the YAML name
+        val tuneEntries: List<Pair<String, String>> = selection.artistes.flatMap { artist ->
+            artist.tunes.map { url -> artist.name to url }
+        }
+
+        // Collect all playlist URLs — artist folder is determined per-video from YouTube metadata
+        val playlistUrls: List<String> = selection.artistes.flatMap { artist ->
+            artist.playlists
+        }
+
         tasks.register("download", DownloadMusicTask::class.java) { task ->
             task.apply {
                 group = NEWPIPE_GROUP
@@ -39,9 +49,10 @@ newpipe { configPath = file("musics.yml").absolutePath }
                     .get()
                     .run(::File)
                     .name
-                    .let { "Download files from selection defined in $it" }
+                    .let { "Download all tunes and playlists from $it" }
                 outputPath = "${project.projectDir}/downloads"
-                url = selection.artistes.first().tunes.first()
+                this.tuneEntries = tuneEntries
+                this.playlistUrls = playlistUrls
             }
         }
     }
