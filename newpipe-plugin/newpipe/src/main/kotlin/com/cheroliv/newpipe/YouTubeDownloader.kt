@@ -1,5 +1,6 @@
 package com.cheroliv.newpipe
 
+import com.cheroliv.newpipe.NewpipeManager.REGEX_CLEAN_TUNE_NAME
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import okhttp3.OkHttpClient
@@ -12,6 +13,7 @@ import org.schabi.newpipe.extractor.stream.StreamInfo
 import org.slf4j.LoggerFactory
 import java.io.File
 import java.io.FileOutputStream
+
 
 /**
  * Downloads audio from YouTube videos using NewPipe Extractor
@@ -99,11 +101,11 @@ class YouTubeDownloader {
                     throw DownloadException("Download request failed: ${response.code}")
                 }
 
-                val totalBytes = response.body?.contentLength() ?: -1L
+                val totalBytes = response.body.contentLength()
                 var downloadedBytes = 0L
                 var lastPercent = 0
 
-                response.body?.byteStream()?.use { input ->
+                response.body.byteStream().use { input ->
                     FileOutputStream(outputFile).use { output ->
                         val buffer = ByteArray(8192)
                         var bytesRead: Int
@@ -140,7 +142,7 @@ class YouTubeDownloader {
      */
     fun sanitizeFileName(name: String): String {
         return name
-            .replace(Regex("[^a-zA-Z0-9àâäéèêëïîôùûüÿçÀÂÄÉÈÊËÏÎÔÙÛÜŸÇ \\-_]"), "")
+            .replace(Regex(REGEX_CLEAN_TUNE_NAME), "")
             .replace(Regex("\\s+"), " ")
             .trim()
             .take(200)
