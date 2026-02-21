@@ -9,7 +9,7 @@ import org.assertj.core.api.Assertions.assertThat
 class MinimalSteps(private val world: TestWorld) {
 
     @Given("a new Newpipe project")
-    fun createNewBakeryProject() {
+    fun createNewpipeProject() {
         world.createGradleProject()
         assertThat(world.projectDir).exists()
     }
