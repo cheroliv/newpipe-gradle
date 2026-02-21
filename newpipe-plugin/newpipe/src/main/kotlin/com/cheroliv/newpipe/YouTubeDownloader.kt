@@ -7,13 +7,14 @@ import okhttp3.OkHttpClient
 import okhttp3.Request
 import org.schabi.newpipe.extractor.NewPipe
 import org.schabi.newpipe.extractor.ServiceList
+import org.schabi.newpipe.extractor.playlist.PlaylistInfo
 import org.schabi.newpipe.extractor.services.youtube.extractors.YoutubeStreamExtractor
 import org.schabi.newpipe.extractor.stream.AudioStream
 import org.schabi.newpipe.extractor.stream.StreamInfo
+import org.schabi.newpipe.extractor.stream.StreamInfoItem
 import org.slf4j.LoggerFactory
 import java.io.File
 import java.io.FileOutputStream
-
 
 /**
  * Downloads audio from YouTube videos using NewPipe Extractor
@@ -52,6 +53,44 @@ class YouTubeDownloader {
         } catch (e: Exception) {
             logger.error("Failed to extract video information: ${e.message}", e)
             throw DownloadException("Unable to extract video information", e)
+        }
+    }
+
+    /**
+     * Extracts all video URLs from a YouTube playlist, following pagination
+     * until every page has been fetched.
+     *
+     * @param playlistUrl YouTube playlist URL
+     * @return List of YouTube video URLs found in the playlist
+     */
+    suspend fun getPlaylistVideoUrls(playlistUrl: String): List<String> = withContext(Dispatchers.IO) {
+        logger.info("Fetching playlist: $playlistUrl")
+
+        try {
+            val service = ServiceList.YouTube
+            val extractor = service.getPlaylistExtractor(playlistUrl)
+            extractor.fetchPage()
+
+            val items = mutableListOf<StreamInfoItem>()
+
+            // Collect items page by page
+            val firstPage = PlaylistInfo.getInfo(extractor)
+            items += firstPage.relatedItems.filterIsInstance<StreamInfoItem>()
+
+            var nextPage = firstPage.nextPage
+            while (nextPage != null) {
+                logger.info("Fetching next playlist page...")
+                val moreItems = PlaylistInfo.getMoreItems(service, playlistUrl, nextPage)
+                items += moreItems.items.filterIsInstance<StreamInfoItem>()
+                nextPage = moreItems.nextPage
+            }
+
+            val urls = items.map { it.url }
+            logger.info("Playlist contains ${urls.size} video(s)")
+            urls
+        } catch (e: Exception) {
+            logger.error("Failed to fetch playlist: ${e.message}", e)
+            throw DownloadException("Unable to fetch playlist videos", e)
         }
     }
 
