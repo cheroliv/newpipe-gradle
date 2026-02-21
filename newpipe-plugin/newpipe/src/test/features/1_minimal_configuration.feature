@@ -1,5 +1,5 @@
-##noinspection CucumberUndefinedStep
-#@cucumber @newpipe
+#noinspection CucumberUndefinedStep
+@cucumber @newpipe
 Feature: Minimal newpipe configuration
 
   Scenario: Canary
