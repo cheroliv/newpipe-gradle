@@ -1,8 +1,8 @@
 package com.cheroliv.newpipe
 
-import kotlinx.coroutines.Dispatchers
+import com.cheroliv.newpipe.NewpipeManager.REGEX_CLEAN_TUNE_NAME
+import kotlinx.coroutines.Dispatchers.IO
 import kotlinx.coroutines.withContext
-import okhttp3.OkHttpClient
 import okhttp3.Request
 import org.schabi.newpipe.extractor.NewPipe
 import org.schabi.newpipe.extractor.ServiceList
@@ -11,22 +11,34 @@ import org.schabi.newpipe.extractor.services.youtube.extractors.YoutubeStreamExt
 import org.schabi.newpipe.extractor.stream.StreamInfo
 import org.schabi.newpipe.extractor.stream.StreamInfoItem
 import org.slf4j.LoggerFactory
+import java.io.BufferedOutputStream
 import java.io.File
 import java.io.FileOutputStream
 
 /**
  * Real implementation of [VideoInfoProvider] using NewPipe Extractor + OkHttp.
+ *
+ * Uses the shared [DownloaderImpl.httpClient] singleton — no separate OkHttpClient
+ * is created here, so connection pools and thread pools are shared with the
+ * metadata extraction layer.
  */
 class YouTubeDownloader : VideoInfoProvider {
 
     private val logger = LoggerFactory.getLogger(YouTubeDownloader::class.java)
-    private val httpClient = OkHttpClient()
+
+    // Reuse the singleton — no new connection pool, no new thread pool
+    private val httpClient = DownloaderImpl.httpClient
+
+    companion object {
+        // 128 KB — significantly reduces syscall overhead vs the default 8 KB
+        private const val DOWNLOAD_BUFFER_SIZE = 128 * 1024
+    }
 
     init {
         NewPipe.init(DownloaderImpl.getInstance())
     }
 
-    override suspend fun getVideoInfo(url: String): VideoMetadata = withContext(Dispatchers.IO) {
+    override suspend fun getVideoInfo(url: String): VideoMetadata = withContext(IO) {
         logger.info("Extracting video information for: $url")
         try {
             val extractor = ServiceList.YouTube.getStreamExtractor(url) as YoutubeStreamExtractor
@@ -36,11 +48,11 @@ class YouTubeDownloader : VideoInfoProvider {
             logger.info("Uploader: ${streamInfo.uploaderName}")
             logger.info("Duration: ${streamInfo.duration} seconds")
             VideoMetadata(
-                title        = streamInfo.name,
+                title = streamInfo.name,
                 uploaderName = streamInfo.uploaderName,
-                duration     = streamInfo.duration,
-                url          = streamInfo.url,
-                streamInfo   = streamInfo
+                duration = streamInfo.duration,
+                url = streamInfo.url,
+                streamInfo = streamInfo
             )
         } catch (e: Exception) {
             logger.error("Failed to extract video information: ${e.message}", e)
@@ -49,10 +61,10 @@ class YouTubeDownloader : VideoInfoProvider {
     }
 
     override suspend fun getPlaylistVideoUrls(playlistUrl: String): List<String> =
-        withContext(Dispatchers.IO) {
+        withContext(IO) {
             logger.info("Fetching playlist: $playlistUrl")
             try {
-                val service  = ServiceList.YouTube
+                val service = ServiceList.YouTube
                 val extractor = service.getPlaylistExtractor(playlistUrl)
                 extractor.fetchPage()
 
@@ -82,7 +94,7 @@ class YouTubeDownloader : VideoInfoProvider {
         metadata: VideoMetadata,
         outputFile: File,
         onProgress: (downloaded: Long, total: Long, percent: Int) -> Unit
-    ): File = withContext(Dispatchers.IO) {
+    ): File = withContext(IO) {
         val streamInfo = metadata.streamInfo
             ?: throw DownloadException("No StreamInfo available — cannot download audio")
 
@@ -102,13 +114,14 @@ class YouTubeDownloader : VideoInfoProvider {
             httpClient.newCall(request).execute().use { response ->
                 if (!response.isSuccessful) throw DownloadException("Download request failed: ${response.code}")
 
-                val totalBytes = response.body?.contentLength() ?: -1L
+                val totalBytes = response.body.contentLength()
                 var downloadedBytes = 0L
                 var lastPercent = 0
 
-                response.body?.byteStream()?.use { input ->
-                    FileOutputStream(outputFile).use { output ->
-                        val buffer = ByteArray(8192)
+                response.body.byteStream().use { input ->
+                    // BufferedOutputStream avoids per-chunk syscalls to the kernel
+                    BufferedOutputStream(FileOutputStream(outputFile), DOWNLOAD_BUFFER_SIZE).use { output ->
+                        val buffer = ByteArray(DOWNLOAD_BUFFER_SIZE)
                         var bytesRead: Int
                         while (input.read(buffer).also { bytesRead = it } != -1) {
                             output.write(buffer, 0, bytesRead)
@@ -134,7 +147,7 @@ class YouTubeDownloader : VideoInfoProvider {
     }
 
     override fun sanitizeFileName(name: String): String =
-        name.replace(Regex("[^a-zA-Z0-9àâäéèêëïîôùûüÿçÀÂÄÉÈÊËÏÎÔÙÛÜŸÇ \\-_]"), "")
+        name.replace(Regex(REGEX_CLEAN_TUNE_NAME), "")
             .replace(Regex("\\s+"), " ")
             .trim()
             .take(200)
