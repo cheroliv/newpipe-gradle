@@ -1,0 +1,297 @@
+= newpipe-gradle
+:toc: left
+:toc-title: Sommaire
+:toclevels: 3
+:icons: font
+:source-highlighter: highlight.js
+:hardbreaks-option:
+
+image:https://img.shields.io/badge/Kotlin-2.x-7F52FF?logo=kotlin[Kotlin]
+image:https://img.shields.io/badge/Gradle-8.x-02303A?logo=gradle[Gradle]
+image:https://img.shields.io/badge/License-Apache%202.0-blue.svg[License]
+
+Projet Gradle qui utilise le plugin `com.cheroliv.newpipe` pour télécharger
+de la musique depuis YouTube et la convertir en MP3, sans dépendance Python.
+
+== Prérequis
+
+[cols="1,2,1", options="header"]
+|===
+| Outil | Rôle | Obligatoire
+
+| JDK 24+
+| Runtime Gradle et plugin
+| ✅
+
+| Docker _ou_ FFmpeg local
+| Conversion audio en MP3
+| ✅ (l'un ou l'autre)
+
+| Docker
+| Alternative à FFmpeg système
+| ⬜ optionnel
+|===
+
+[NOTE]
+====
+Aucune dépendance Python n'est requise.
+`yt-dlp` n'est pas utilisé — l'extraction YouTube est faite via
+https://github.com/TeamNewPipe/NewPipeExtractor[NewPipe Extractor] en pur JVM.
+====
+
+== Structure du projet
+
+[source,text]
+----
+newpipe-gradle/               <-- ce dépôt (projet consommateur)
+├── build.gradle.kts          <-- applique le plugin, rien d'autre
+├── settings.gradle.kts       <-- déclare JitPack dans pluginManagement
+├── musics.yml                <-- votre sélection musicale
+├── gradle/
+│   └── libs.versions.toml   <-- catalogue de versions
+└── newpipe-plugin/           <-- code source du plugin (sous-projet)
+----
+
+== Configuration
+
+=== settings.gradle.kts
+
+JitPack doit être déclaré dans `pluginManagement` car le plugin dépend de
+NewPipe Extractor, hébergé sur JitPack.
+
+[source,kotlin]
+----
+pluginManagement {
+    repositories {
+        mavenLocal()
+        gradlePluginPortal()
+        mavenCentral()
+        maven { url = uri("https://jitpack.io") }
+    }
+}
+
+dependencyResolutionManagement {
+    repositories {
+        mavenLocal()
+        mavenCentral()
+        maven { url = uri("https://jitpack.io") }
+    }
+}
+
+plugins {
+    id("org.gradle.toolchains.foojay-resolver-convention") version "1.0.0"
+}
+
+rootProject.name = "newpipe-plugin"
+include("newpipe")
+----
+
+=== build.gradle.kts
+
+[source,kotlin]
+----
+plugins {
+    id("com.cheroliv.newpipe") version "1.0.0"
+}
+
+newpipe {
+    configPath = file("musics.yml").absolutePath
+}
+----
+
+=== musics.yml
+
+Le fichier de configuration déclare les artistes, leurs pistes individuelles
+et leurs playlists YouTube.
+
+[source,yaml]
+----
+artistes:
+  - name: Daft Punk
+    tunes:
+      - https://www.youtube.com/watch?v=5NV6Rdv1a3I
+      - https://www.youtube.com/watch?v=gAjR4_CbPpQ
+    playlists:
+      - https://www.youtube.com/playlist?list=PLx0sYbCqOb8TBPRdmBHs5Iftvv9TPboYG
+
+  - name: Massive Attack
+    tunes:
+      - https://www.youtube.com/watch?v=u7K72X4eo_s
+    playlists:
+      - https://www.youtube.com/watch?v=5dWeeUIZFgA&list=RDEMtbC_BXEtvKp9p_L81bzVwA&start_radio=1
+----
+
+==== Structure YAML
+
+[cols="1,3", options="header"]
+|===
+| Champ | Description
+
+| `artistes`
+| Liste des artistes à télécharger
+
+| `artistes[].name`
+| Nom de l'artiste — sert de nom de dossier sous `downloads/`
+
+| `artistes[].tunes`
+| URLs YouTube individuelles. Le nom de l'artiste vient du champ `name`.
+
+| `artistes[].playlists`
+| URLs de playlists YouTube (standard ou Mix Radio `list=RD...`).
+Le nom de l'artiste vient du tag uploader de la vidéo YouTube.
+|===
+
+[NOTE]
+====
+*Mix Radio YouTube* (`list=RD...`, `list=RDEM...`, `list=RDAMVM...`) +
+Ces playlists sont générées dynamiquement. Le plugin récupère automatiquement
+la première page (~15 pistes) et s'arrête, sans boucle infinie.
+====
+
+== Utilisation
+
+=== Télécharger la sélection complète
+
+[source,bash]
+----
+./gradlew download
+----
+
+Les MP3 sont organisés ainsi :
+
+[source,text]
+----
+downloads/
+└── Daft Punk/
+│   ├── Daft Punk - Get Lucky.mp3
+│   └── Daft Punk - Around the World.mp3
+└── Massive Attack/
+    └── Massive Attack - Teardrop.mp3
+----
+
+=== Télécharger une seule vidéo (CLI)
+
+[source,bash]
+----
+./gradlew download --url=https://www.youtube.com/watch?v=5NV6Rdv1a3I
+----
+
+Avec dossier de sortie personnalisé :
+
+[source,bash]
+----
+./gradlew download \
+  --url=https://www.youtube.com/watch?v=5NV6Rdv1a3I \
+  --output=/home/user/Music
+----
+
+=== Voir toutes les tâches disponibles
+
+[source,bash]
+----
+./gradlew tasks --group=newpipe
+----
+
+== Comportements
+
+=== Téléchargements concurrents
+
+Le plugin télécharge jusqu'à 3 vidéos simultanément pour maximiser le débit
+tout en évitant le throttling YouTube. Dès qu'un téléchargement se termine,
+la conversion en MP3 démarre immédiatement — les fichiers temporaires ne
+s'accumulent pas.
+
+=== Détection des doublons
+
+Avant chaque téléchargement, le plugin vérifie si un MP3 identique existe
+déjà via les tags ID3 (titre, artiste) et la durée audio (tolérance ±2s).
+Si le fichier est identique, il est ignoré.
+
+=== Reprise après interruption
+
+Si la tâche est interrompue (Ctrl+C, coupure réseau), les fichiers temporaires
+(`_temp.m4a`) et les MP3 incomplets sont supprimés automatiquement au
+prochain lancement. Le téléchargement repart proprement depuis le début.
+
+=== Playlists et vidéos introuvables
+
+Si une playlist ou une vidéo n'existe plus (supprimée, privée, URL invalide),
+elle est ignorée avec un avertissement dans les logs. Le reste de la sélection
+continue d'être téléchargé.
+
+=== Nommage des fichiers
+
+[source,text]
+----
+downloads/<Artiste>/<Artiste> - <Titre>.mp3
+----
+
+Si le titre YouTube contient uniquement des caractères spéciaux qui ne peuvent
+pas être utilisés dans un nom de fichier, le titre brut YouTube est conservé
+avec seulement les caractères interdits par le système de fichiers remplacés.
+
+== Tags ID3 écrits
+
+[cols="1,2", options="header"]
+|===
+| Tag | Valeur
+
+| `TITLE`
+| Titre de la vidéo YouTube
+
+| `ARTIST`
+| Nom de l'artiste (YAML pour les tunes, uploader YouTube pour les playlists)
+
+| `ALBUM`
+| `YouTube`
+
+| `COVER`
+| Miniature de la vidéo YouTube
+|===
+
+== Dépannage
+
+=== La tâche `download` échoue avec "configPath not found"
+
+Vérifiez que `musics.yml` existe à la racine du projet et que le chemin dans
+`build.gradle.kts` est correct :
+
+[source,kotlin]
+----
+newpipe {
+    configPath = file("musics.yml").absolutePath  // chemin absolu requis
+}
+----
+
+=== Le téléchargement est très lent
+
+YouTube applique un throttling aux clients non officiels. Ce comportement est
+lié à la version de NewPipe Extractor utilisée. Pour pointer sur la dernière
+version de la branche `dev` (correctifs les plus récents) :
+
+[source,toml]
+----
+# gradle/libs.versions.toml
+[versions]
+newpipe-extractor = "abc1234567"  # hash du dernier commit dev
+# https://github.com/TeamNewPipe/NewPipeExtractor/commits/dev
+----
+
+=== FFmpeg introuvable
+
+Installez FFmpeg sur votre système :
+
+[source,bash]
+----
+# Debian / Ubuntu
+sudo apt install ffmpeg
+
+# macOS
+brew install ffmpeg
+
+# Arch Linux
+sudo pacman -S ffmpeg
+----
+
+Ou utilisez Docker (support à venir dans une prochaine version du plugin).
+----
