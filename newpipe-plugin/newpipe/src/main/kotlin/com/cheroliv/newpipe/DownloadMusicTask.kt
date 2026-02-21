@@ -148,45 +148,33 @@ open class DownloadMusicTask : DefaultTask() {
             val semaphore = Semaphore(MAX_CONCURRENT_DOWNLOADS)
             val converter = newAudioConverter()
 
-            // ── Phase 1: concurrent downloads ─────────────────────────
-            val downloaded: List<DownloadedTrack?> = allEntries
+            // Each coroutine downloads then immediately converts — no accumulation of temp files.
+            // The semaphore limits concurrent downloads; conversion runs inline after each download.
+            allEntries
                 .mapIndexed { index, (artistHint, tuneUrl) ->
                     val label = "[${index + 1}/${allEntries.size}] ${artistHint ?: tuneUrl}"
                     async(Dispatchers.IO) {
                         semaphore.withPermit {
                             logger.info("\n⬇ Downloading $label")
                             runCatching {
-                                fetchAudio(tuneUrl, artistHint, baseOutputDir, label)
-                            }.getOrElse { e ->
-                                if (e.isNotFound()) logger.warn("⏭ Not found, skipping: $tuneUrl")
-                                else {
-                                    val msg = "Failed to download $tuneUrl: ${e.message}"
-                                    logger.error(msg)
-                                    errors += msg
+                                val track = fetchAudio(tuneUrl, artistHint, baseOutputDir, label)
+                                logger.info("\n🎵 Converting: ${track.label}")
+                                convertTrack(converter, track)
+                            }.onFailure { e ->
+                                when {
+                                    e is AlreadyDownloadedException -> { /* already logged in fetchAudio */ }
+                                    e.isNotFound() -> logger.warn("⏭ Not found, skipping: $tuneUrl")
+                                    else -> {
+                                        val msg = "Failed [$label] $tuneUrl: ${e.message}"
+                                        logger.error(msg)
+                                        errors += msg
+                                    }
                                 }
-                                null
                             }
                         }
                     }
                 }
                 .awaitAll()
-
-            // ── Phase 2: sequential conversions ───────────────────────
-            val toConvert = downloaded.filterNotNull()
-            logger.info("\n" + "=".repeat(60))
-            logger.info("Converting ${toConvert.size} track(s) to MP3...")
-            logger.info("=".repeat(60))
-
-            toConvert.forEachIndexed { index, track ->
-                logger.info("\n🎵 [${index + 1}/${toConvert.size}] Converting: ${track.label}")
-                runCatching {
-                    convertTrack(converter, track)
-                }.onFailure { e ->
-                    val msg = "Failed to convert ${track.label}: ${e.message}"
-                    logger.error(msg)
-                    errors += msg
-                }
-            }
         }
 
         // ── Summary ────────────────────────────────────────────────────
@@ -240,6 +228,20 @@ open class DownloadMusicTask : DefaultTask() {
         }
 
         val tempFile = File(artistDir, "$sanitizedArtist - ${sanitizedTitle}_temp.m4a")
+
+        // Clean up any leftover temp file from a previous interrupted download
+        if (tempFile.exists()) {
+            tempFile.delete()
+            logger.warn("[$label] Deleted incomplete temp file: ${tempFile.name}")
+        }
+
+        // A mp3 that exists but failed alreadyDownloaded() check has corrupt/missing tags
+        // (e.g. conversion was interrupted) — delete it so it gets rebuilt cleanly
+        if (mp3File.exists()) {
+            mp3File.delete()
+            logger.warn("[$label] Deleted incomplete MP3 (tags mismatch): ${mp3File.name}")
+        }
+
         var lastPercent = 0
 
         infoProvider.downloadBestAudio(metadata, tempFile) { downloaded, total, percent ->
