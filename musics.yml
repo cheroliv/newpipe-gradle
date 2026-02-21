@@ -15,22 +15,17 @@ artistes:
   - name: "Cheb Lotfi"
     playlists:
       - "https://www.youtube.com/watch?v=7_cv3sOC28I&list=PLwHh_R-V7CCjvEhMuTo3lHMYgIhteFhs0"
-      - "https://www.youtube.com/playlist?list=PLJ9kpcY21uC43gq2N2iBA6641i-2j5-0M"
     tunes:
       - "https://www.youtube.com/watch?v=Q2kDfmCNCE4"
       - "https://www.youtube.com/watch?v=TLsxaH7se3w"
       - "https://www.youtube.com/watch?v=znK94Ozuye8"
   - name: "Djamel Sghir"
-    playlists:
-      - "https://www.youtube.com/watch?v=RtjRazd1zVY&list=OLAK5uy_lUaJ9mohowixPTKV-fvnTydJzMmssj-4U"
-      - "https://www.youtube.com/playlist?list=PLJ9kpcY21uC43gq2N2iBA6641i-2j5-0M"
     tunes:
       - "https://www.youtube.com/watch?v=SXSvwSGfbNE"
       - "https://www.youtube.com/watch?v=hgJxCHEK2mA"
   - name: "Cheb Mami"
     playlists:
       - "https://www.youtube.com/watch?v=4Lk6b-1HR1o&list=PLehZ-vuP969TCvgy1Nf0YkMmMqxALxDCp"
-      - "https://www.youtube.com/playlist?list=PLJ9kpcY21uC43gq2N2iBA6641i-2j5-0M"
     tunes:
       - "https://www.youtube.com/watch?v=4aBxNH6ODc8"
       - "https://www.youtube.com/watch?v=bNC048fUqxg"
@@ -42,10 +37,7 @@ artistes:
       - "https://www.youtube.com/watch?v=6-UOmjw9viQ"
       - "https://www.youtube.com/watch?v=bYGndvJhBuk"
       - "https://www.youtube.com/watch?v=Gk0j9B6zqtY"
-      - "https://www.youtube.com/watch?v=u4peNrSkJ8k"
   - name: "Ayman Serhani"
-    playlists:
-      - "https://www.youtube.com/playlist?list=PLJ9kpcY21uC43gq2N2iBA6641i-2j5-0M"
     tunes:
       - "https://www.youtube.com/watch?v=7K_SpSf4Mhk"
       - "https://www.youtube.com/watch?v=FgAbqk-dL8s"
@@ -53,14 +45,11 @@ artistes:
       - "https://www.youtube.com/watch?v=8MMV1qvWrOI"
       - "https://www.youtube.com/watch?v=xKloph88xzM"
       - "https://www.youtube.com/watch?v=Tf0xzIeQp2g"
-      - "https://www.youtube.com/watch?v=n8ugKNvoHsU"
       - "https://www.youtube.com/watch?v=xZy_61Aq2BI"
       - "https://www.youtube.com/watch?v=u_nX4oH6U6M"
       - "https://www.youtube.com/watch?v=SwDxpGz78Pc"
       - "https://www.youtube.com/watch?v=_OONwXD1kus"
   - name: "TiiwTiiw"
-    playlists:
-      - "https://www.youtube.com/playlist?list=PLJ9kpcY21uC43gq2N2iBA6641i-2j5-0M"
     tunes:
       - "https://www.youtube.com/watch?v=f8NapGGtMvo"
       - "https://www.youtube.com/watch?v=keHEsFPBlTk"
@@ -91,25 +80,18 @@ artistes:
     tunes:
       - "https://www.youtube.com/watch?v=9c3tN6flADE"
   - name: "Cheb Hasni"
-    playlists:
-      - "https://www.youtube.com/playlist?list=PLJ9kpcY21uC43gq2N2iBA6641i-2j5-0M"
     tunes:
       - "https://www.youtube.com/watch?v=NQjxUPqgSKE"
   - name: "Cheb Khaled"
-    playlists:
-      - "https://www.youtube.com/playlist?list=PLJ9kpcY21uC43gq2N2iBA6641i-2j5-0M"
     tunes:
       - "https://www.youtube.com/watch?v=bYGndvJhBuk"
       - "https://www.youtube.com/watch?v=bHd4UwJCLK0"
-      - "https://www.youtube.com/watch?v=V3-Q1-ST-rY"
       - "https://www.youtube.com/watch?v=FWFkals_uMo"
   - name: "Chebba Maria"
     tunes:
       - "https://www.youtube.com/watch?v=E-pMg6100g0"
       - "https://www.youtube.com/watch?v=Zef4HsGb474"
   - name: "Cheb Bilal"
-    playlists:
-      - "https://www.youtube.com/playlist?list=PLJ9kpcY21uC43gq2N2iBA6641i-2j5-0M"
     tunes:
       - "https://youtu.be/6niDAI8C6ZY?si=gqSV6l7b3QftmbL4"
 
@@ -131,8 +113,6 @@ artistes:
       - "https://www.youtube.com/watch?v=XpjzxTzsSew"
 
   - name: "Cheb Houssem"
-    playlists:
-      - "https://www.youtube.com/playlist?list=PLJ9kpcY21uC43gq2N2iBA6641i-2j5-0M"
     tunes:
       - "https://www.youtube.com/watch?v=AkZKeOnUuTI"
 
@@ -145,8 +125,6 @@ artistes:
       - "https://www.youtube.com/watch?v=gXAnRuVlAvk"
 
   - name: "Saad Lamjarred"
-    playlists:
-      - "https://www.youtube.com/playlist?list=PLJ9kpcY21uC43gq2N2iBA6641i-2j5-0M"
     tunes:
       - "https://www.youtube.com/watch?v=a7Vgun2HJso"
 
@@ -159,26 +137,16 @@ artistes:
       - "https://www.youtube.com/watch?v=KrluG8BTGBE"
 
   - name: "Bilal Sghir"
-    playlists:
-      - "https://www.youtube.com/playlist?list=PLJ9kpcY21uC43gq2N2iBA6641i-2j5-0M"
     tunes:
       - "https://www.youtube.com/watch?v=iuid_jkoowY"
 
   - name: "Zina Daoudia"
-    playlists:
-      - "https://www.youtube.com/playlist?list=PLJ9kpcY21uC43gq2N2iBA6641i-2j5-0M"
     tunes:
       - "https://www.youtube.com/watch?v=yA2LAqFAqV4"
 
   - name: "Cheba Souad"
-    playlists:
-      - "https://www.youtube.com/playlist?list=PLJ9kpcY21uC43gq2N2iBA6641i-2j5-0M"
     tunes:
       - "https://www.youtube.com/watch?v=YXlU0mPzpE8"
-
-  - name: "Amine La Colombe"
-    playlists:
-      - "https://www.youtube.com/playlist?list=PLJ9kpcY21uC43gq2N2iBA6641i-2j5-0M"
 
   - name: "Cheb Mohamed El Sghir"
     tunes:
