@@ -113,9 +113,13 @@ open class DownloadMusicTask : DefaultTask() {
                 logger.info("\n[${index + 1}/${tuneEntries.size}] $artistName — $tuneUrl")
                 runCatching { downloadSingle(tuneUrl, artistHint = artistName, baseOutputDir) }
                     .onFailure { e ->
-                        val msg = "Failed (tune) [$artistName] $tuneUrl: ${e.message}"
-                        logger.error(msg)
-                        errors += msg
+                        if (e.isNotFound()) {
+                            logger.warn("⏭ Tune not found, skipping: $tuneUrl")
+                        } else {
+                            val msg = "Failed (tune) [$artistName] $tuneUrl: ${e.message}"
+                            logger.error(msg)
+                            errors += msg
+                        }
                     }
             }
         }
@@ -134,9 +138,13 @@ open class DownloadMusicTask : DefaultTask() {
                 val videoUrls: List<String> = runCatching {
                     runBlocking { infoProvider.getPlaylistVideoUrls(playlistUrl) }
                 }.getOrElse { e ->
-                    val msg = "Failed to fetch playlist $playlistUrl: ${e.message}"
-                    logger.error(msg)
-                    errors += msg
+                    if (e.isNotFound()) {
+                        logger.warn("⏭ Playlist not found, skipping: $playlistUrl")
+                    } else {
+                        val msg = "Failed to fetch playlist $playlistUrl: ${e.message}"
+                        logger.error(msg)
+                        errors += msg
+                    }
                     return@forEachIndexed
                 }
 
@@ -146,9 +154,13 @@ open class DownloadMusicTask : DefaultTask() {
                     logger.info("\n  [${vIndex + 1}/${videoUrls.size}] $videoUrl")
                     runCatching { downloadSingle(videoUrl, artistHint = null, baseOutputDir) }
                         .onFailure { e ->
-                            val msg = "Failed (playlist video) $videoUrl: ${e.message}"
-                            logger.error(msg)
-                            errors += msg
+                            if (e.isNotFound()) {
+                                logger.warn("⏭ Video not found, skipping: $videoUrl")
+                            } else {
+                                val msg = "Failed (playlist video) $videoUrl: ${e.message}"
+                                logger.error(msg)
+                                errors += msg
+                            }
                         }
                 }
             }
@@ -256,4 +268,24 @@ open class DownloadMusicTask : DefaultTask() {
         val secs    = seconds % 60
         return "%02d:%02d".format(minutes, secs)
     }
+}
+
+// ------------------------------------------------------------------
+// Extension helpers
+// ------------------------------------------------------------------
+
+/**
+ * Returns true if this throwable represents a "not found" condition —
+ * invalid URL, deleted video/playlist, private content, etc.
+ * These are skipped silently rather than reported as build failures.
+ */
+private fun Throwable.isNotFound(): Boolean {
+    val msg = message?.lowercase() ?: return false
+    return msg.contains("404")
+            || msg.contains("not found")
+            || msg.contains("does not exist")
+            || msg.contains("video unavailable")
+            || msg.contains("private video")
+            || msg.contains("this video has been removed")
+            || cause?.isNotFound() == true
 }
