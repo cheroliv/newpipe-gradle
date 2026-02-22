@@ -6,6 +6,14 @@
 :source-highlighter: highlight.js
 :hardbreaks-option:
 
+++++
+<p align="right">
+  <a href="README.adoc">
+    <img src="images/lang-en-blue.svg" alt="English" width="32"/>
+  </a>
+</p>
+++++
+
 image:https://img.shields.io/badge/Kotlin-2.x-7F52FF?logo=kotlin[Kotlin]
 image:https://img.shields.io/badge/Gradle-8.x-02303A?logo=gradle[Gradle]
 image:https://img.shields.io/badge/JitPack-published-brightgreen[JitPack]
@@ -31,10 +39,10 @@ newpipe-plugin/
 └── newpipe/
     └── src/
         ├── main/kotlin/com/cheroliv/newpipe/
-        │   ├── DownloaderPlugin.kt      Plugin entry point
-        │   ├── NewpipeExtension.kt      DSL extension (configPath)
-        │   ├── NewpipeManager.kt        Task registration + YAML parsing
-        │   ├── Models.kt                Selection / Artist data classes
+        │   ├── DownloaderPlugin.kt      Point d'entrée du plugin
+        │   ├── NewpipeExtension.kt      Extension DSL (configPath)
+        │   ├── NewpipeManager.kt        Enregistrement des tâches + parsing YAML
+        │   ├── Models.kt                Data classes Selection / Artist
         │   ├── DownloadMusicTask.kt     Tâche Gradle principale
         │   ├── VideoServices.kt         Interfaces VideoInfoProvider / AudioConverter
         │   ├── VideoMetadata.kt         Data class découplée de StreamInfo
@@ -61,19 +69,19 @@ DownloadMusicTask.download()
     │
     ├── Résolution des playlists (séquentielle)
     │     └── VideoInfoProvider.getPlaylistVideoUrls()
-    │           ├── Mix Radio (list=RD...) → première page seulement (~15 pistes)
+    │           ├── Mix Radio (list=RD...) → première page (~15 pistes)
     │           └── Playlist standard     → toutes les pages (cap 50)
     │
     └── Pipeline concurrent (Semaphore 3) pour chaque URL
           │
-          ├── Phase 1 — fetchAudio()
-          │     ├── VideoInfoProvider.getVideoInfo()   → VideoMetadata
-          │     ├── AudioConverter.alreadyDownloaded() → skip si doublon
+          ├── fetchAudio()
+          │     ├── VideoInfoProvider.getVideoInfo()      → VideoMetadata
+          │     ├── AudioConverter.alreadyDownloaded()    → skip si doublon
           │     └── VideoInfoProvider.downloadBestAudio() → _temp.m4a
           │
-          └── Phase 2 — convertTrack() (inline, dès que le download finit)
-                ├── AudioConverter.convertToMp3()     → FFmpeg 192k
-                └── AudioConverter.addMetadata()      → tags ID3 + cover
+          └── convertTrack() — immédiatement après le download
+                ├── AudioConverter.convertToMp3()         → FFmpeg 192k
+                └── AudioConverter.addMetadata()          → tags ID3 + cover
 ----
 
 == Composants principaux
@@ -188,10 +196,10 @@ private fun newInfoProvider(): VideoInfoProvider =
 .withArguments(tasks + "--stacktrace" + "-D${DownloadMusicTask.MOCK_PROPERTY}=true")
 ----
 
-Les fakes (`FakeVideoInfoProvider`, `FakeAudioConverter`) retournent des
-données fixes instantanément — aucun appel réseau, aucun FFmpeg. Les tests
-vérifient la structure des dossiers, le nommage des fichiers, le skip des
-doublons et la gestion des erreurs en moins d'une seconde par scénario.
+Les fakes retournent des données fixes instantanément — aucun appel réseau,
+aucun FFmpeg. Les tests vérifient la structure des dossiers, le nommage des
+fichiers, le skip des doublons et la gestion des erreurs en moins d'une
+seconde par scénario.
 
 === Lancer les tests
 
@@ -211,7 +219,7 @@ doublons et la gestion des erreurs en moins d'une seconde par scénario.
 | Dépendance | Version | Rôle
 
 | `com.github.TeamNewPipe:NewPipeExtractor`
-| `dev` branch
+| branche `dev`
 | Extraction YouTube (métadonnées + flux audio)
 
 | `com.squareup.okhttp3:okhttp`
@@ -234,19 +242,11 @@ doublons et la gestion des erreurs en moins d'une seconde par scénario.
 [NOTE]
 ====
 NewPipe Extractor est résolu via https://jitpack.io[JitPack]. La version
-pointe sur la branche `dev` plutôt que sur une release taggée pour bénéficier
-des derniers correctifs anti-throttling YouTube.
+pointe sur la branche `dev` pour bénéficier des derniers correctifs
+anti-throttling YouTube.
 ====
 
 == Build et publication
-
-=== Pré-requis
-
-[source,bash]
-----
-# Vérifier la version Java
-java -version  # >= 24
-----
 
 === Build local
 
@@ -279,25 +279,20 @@ ossrhPassword=<votre-password>
 ./gradlew publish
 ----
 
-Les releases signées sont automatiquement publiées sur Maven Central.
-Les SNAPSHOT sont publiés sur le dépôt snapshot Sonatype.
-
 == Problèmes connus
 
 === Throttling YouTube
 
 YouTube applique un throttling aux clients non officiels via le paramètre `n`
-de l'URL de flux. C'est une course-poursuite entre YouTube et NewPipe
-Extractor. En cas de lenteur anormale sur une connexion fibre, bumper la
-dépendance vers le dernier commit `dev` de NewPipe Extractor est la première
-action à entreprendre.
+de l'URL de flux. En cas de lenteur anormale sur une connexion fibre, bumper
+la dépendance vers le dernier commit `dev` de NewPipe Extractor est la
+première action à entreprendre.
 
 === Mix Radio (list=RD...)
 
 Les playlists Mix Radio sont générées dynamiquement par YouTube et ne peuvent
-pas être paginées. Le plugin récupère la première page (~15 pistes) et
-s'arrête. La pagination complète n'est pas possible sans l'API officielle
-YouTube.
+pas être paginées au-delà de la première page. La pagination complète n'est
+pas possible sans l'API officielle YouTube.
 
 == Feuille de route
 

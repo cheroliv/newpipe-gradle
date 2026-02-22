@@ -6,6 +6,14 @@
 :source-highlighter: highlight.js
 :hardbreaks-option:
 
+++++
+<p align="right">
+  <a href="README.adoc">
+    <img src="newpipe-plugin/images/lang-en-blue.svg" alt="English" width="32"/>
+  </a>
+</p>
+++++
+
 image:https://img.shields.io/badge/Kotlin-2.x-7F52FF?logo=kotlin[Kotlin]
 image:https://img.shields.io/badge/Gradle-8.x-02303A?logo=gradle[Gradle]
 image:https://img.shields.io/badge/License-Apache%202.0-blue.svg[License]
@@ -162,7 +170,7 @@ Les MP3 sont organisés ainsi :
 [source,text]
 ----
 downloads/
-└── Daft Punk/
+├── Daft Punk/
 │   ├── Daft Punk - Get Lucky.mp3
 │   └── Daft Punk - Around the World.mp3
 └── Massive Attack/
@@ -267,7 +275,7 @@ newpipe {
 
 YouTube applique un throttling aux clients non officiels. Ce comportement est
 lié à la version de NewPipe Extractor utilisée. Pour pointer sur la dernière
-version de la branche `dev` (correctifs les plus récents) :
+version de la branche `dev` :
 
 [source,toml]
 ----
@@ -279,8 +287,6 @@ newpipe-extractor = "abc1234567"  # hash du dernier commit dev
 
 === FFmpeg introuvable
 
-Installez FFmpeg sur votre système :
-
 [source,bash]
 ----
 # Debian / Ubuntu
@@ -291,7 +297,4 @@ brew install ffmpeg
 
 # Arch Linux
 sudo pacman -S ffmpeg
-----
-
-Ou utilisez Docker (support à venir dans une prochaine version du plugin).
 ----
