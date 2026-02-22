@@ -9,7 +9,7 @@
 ++++
 <p align="right">
   <a href="README_fr.adoc">
-    <img src="images/lang-fr-red.svg" alt="Français" width="32"/>
+    <img src="images/lang-fr-red.svg" alt="Français" width="64"/>
   </a>
 </p>
 ++++

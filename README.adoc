@@ -9,7 +9,7 @@
 ++++
 <p align="right">
   <a href="README_fr.adoc">
-    <img src="newpipe-plugin/images/lang-fr-red.svg" alt="Français" width="32"/>
+    <img src="newpipe-plugin/images/lang-fr-red.svg" alt="Français" width="64"/>
   </a>
 </p>
 ++++
