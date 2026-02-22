@@ -37,6 +37,8 @@ artistes:
       - "https://www.youtube.com/watch?v=6-UOmjw9viQ"
       - "https://www.youtube.com/watch?v=bYGndvJhBuk"
       - "https://www.youtube.com/watch?v=Gk0j9B6zqtY"
+    playlists:
+      - "https://www.youtube.com/watch?v=UQpgU6SUXJU&list=RDEMhZ6Oy2MMZavrtslLaitfhQ&start_radio=1"
   - name: "Ayman Serhani"
     tunes:
       - "https://www.youtube.com/watch?v=7K_SpSf4Mhk"
@@ -76,12 +78,18 @@ artistes:
       - "https://www.youtube.com/watch?v=fCcwJ_e7vm4"
       - "https://www.youtube.com/watch?v=qotSx_1NaX4"
       - "https://www.youtube.com/watch?v=AShuKSFPjy0"
+    playlists:
+      - "https://www.youtube.com/watch?v=oQgX-fQfMJE&list=RDEMMvRQDTNKKKYlCqxWPBtY2A&start_radio=1"
   - name: "Cheb Mimou"
     tunes:
       - "https://www.youtube.com/watch?v=9c3tN6flADE"
+    playlists:
+      - "https://www.youtube.com/watch?v=fIPQYQJjVmM&list=RDEMKfe_HkGUnGVsBDsHEhhEyg&start_radio=1"
   - name: "Cheb Hasni"
     tunes:
       - "https://www.youtube.com/watch?v=NQjxUPqgSKE"
+    playlists:
+      - "https://www.youtube.com/watch?v=NQjxUPqgSKE&list=RDEMlVEieg9F2qg5_K4vWvQqtQ&start_radio=1"
   - name: "Cheb Khaled"
     playlists:
       - "https://www.youtube.com/watch?v=5dWeeUIZFgA&list=RDEMtbC_BXEtvKp9p_L81bzVwA&start_radio=1"
@@ -158,6 +166,22 @@ artistes:
   - name: "Cheb Omar"
     tunes:
       - "https://www.youtube.com/watch?v=w5hUR8gEbjQ"
+    playlists:
+      - "https://www.youtube.com/watch?v=SOV6F_AXzRI&list=RDEMkdRT82xA368-J0oQtZ063A&start_radio=1"
+
+  - name: "Cheb Midou"
+    playlists:
+      - "https://www.youtube.com/watch?v=mwnfRWSYsYE&list=RDEM4YsxhqL7kKOrQre2s5nGzg&start_radio=1"
+
+  - name: "Silya Ziani"
+    playlists:
+      - "https://www.youtube.com/watch?v=-zR1VLkncj8&list=RDEMC6MzRayF0CW4QaDp8AZBOw&start_radio=1"
+  - name: "Rachid Kasmi"
+    playlists:
+      - "https://www.youtube.com/watch?v=a_OCNYlOu24&list=RDEMQuedLvncw8PYIOZsIDM9gA&start_radio=1"
+  - name: "Cheb Zehouani"
+    playlists:
+      - "https://www.youtube.com/watch?v=kNTu8k7Rrg8&list=RDEM4TW7oMSY7SXnJlEA7mKoeg&start_radio=1"
 
 
 
@@ -167,43 +191,6 @@ artistes:
 
 
 
-
-
-
-
-
-
-#  - name: "Cheb Midou"
-#    playlists:
-#      - "https://www.youtube.com/watch?v=mwnfRWSYsYE&list=RDEM4YsxhqL7kKOrQre2s5nGzg&start_radio=1"
-#  - name: "Amine La Colombe"
-#  - name: "Silya Ziani"
-#    playlists:
-#      - "https://www.youtube.com/watch?v=-zR1VLkncj8&list=RDEMC6MzRayF0CW4QaDp8AZBOw&start_radio=1"
-#  - name: "Rachid Kasmi"
-#    playlists:
-#      - "https://www.youtube.com/watch?v=a_OCNYlOu24&list=RDEMQuedLvncw8PYIOZsIDM9gA&start_radio=1"
-#  - name: "Cheb Zehouani"
-#    playlists:
-#      - "https://www.youtube.com/watch?v=kNTu8k7Rrg8&list=RDEM4TW7oMSY7SXnJlEA7mKoeg&start_radio=1"
-#  - name: "Bilel Tachini"
-#    playlists:
-#      - "https://www.youtube.com/watch?v=UQpgU6SUXJU&list=RDEMhZ6Oy2MMZavrtslLaitfhQ&start_radio=1"
-#  - name: "Cheba Zahouania"
-#    playlists:
-#      - "https://www.youtube.com/watch?v=oQgX-fQfMJE&list=RDEMMvRQDTNKKKYlCqxWPBtY2A&start_radio=1"
-#
-#  - name: "Cheb Mimou"
-#    playlists:
-#      - "https://www.youtube.com/watch?v=fIPQYQJjVmM&list=RDEMKfe_HkGUnGVsBDsHEhhEyg&start_radio=1"
-#
-#  - name: "Cheb Hasni"
-#    playlists:
-#      - "https://www.youtube.com/watch?v=NQjxUPqgSKE&list=RDEMlVEieg9F2qg5_K4vWvQqtQ&start_radio=1"
-#
-#  - name: "Cheb Omar"
-#    playlists:
-#      - "https://www.youtube.com/watch?v=SOV6F_AXzRI&list=RDEMkdRT82xA368-J0oQtZ063A&start_radio=1"
 #  - name: "Mamine"
 #
 #  - name: "Hichem Smati"
@@ -217,7 +204,7 @@ artistes:
 #  - name: "Cheb Adjel"
 #
 #  - name: "Cheb Lotion"
-
+#  - name: "Amine La Colombe"
 #  Bille tachini  .Khaled.chebmami. hichem smati  amine la colombe. Cheb Omar . Cheb zehouani.  Cheb rachid kasmi. Silya  ziani.
 #  artistes:
 #
