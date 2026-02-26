@@ -5,6 +5,7 @@
 :icons: font
 :source-highlighter: highlight.js
 :hardbreaks-option:
+:plugin_version: 0.0.2
 
 ++++
 <p align="right">

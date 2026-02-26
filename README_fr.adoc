@@ -5,6 +5,7 @@
 :icons: font
 :source-highlighter: highlight.js
 :hardbreaks-option:
+:plugin_version: 0.0.2
 
 ++++
 <p align="right">
@@ -94,10 +95,10 @@ include("newpipe")
 
 Configuration minimale — seul `configPath` est obligatoire :
 
-[source,kotlin]
+[source,kotlin,subs="attributes+"]
 ----
 plugins {
-    id("com.cheroliv.newpipe") version "1.0.0"
+    id("com.cheroliv.newpipe") version ("{plugin_version}")
 }
 
 newpipe {
@@ -107,10 +108,10 @@ newpipe {
 
 Configuration complète avec toutes les options disponibles :
 
-[source,kotlin]
+[source,kotlin,subs="attributes+"]
 ----
 plugins {
-    id("com.cheroliv.newpipe") version "1.0.0"
+    id("com.cheroliv.newpipe") version ("{plugin_version}")
 }
 
 newpipe {
@@ -161,18 +162,18 @@ et leurs playlists YouTube.
 [source,yaml]
 ----
 artistes:
-  - name: Daft Punk
+  - name: "Daft Punk"
     tunes:
-      - https://www.youtube.com/watch?v=5NV6Rdv1a3I
-      - https://www.youtube.com/watch?v=gAjR4_CbPpQ
+      - "https://www.youtube.com/watch?v=5NV6Rdv1a3I"
+      - "https://www.youtube.com/watch?v=gAjR4_CbPpQ"
     playlists:
-      - https://www.youtube.com/playlist?list=PLx0sYbCqOb8TBPRdmBHs5Iftvv9TPboYG
+      - "https://www.youtube.com/playlist?list=PLx0sYbCqOb8TBPRdmBHs5Iftvv9TPboYG"
 
-  - name: Massive Attack
+  - name: "Massive Attack"
     tunes:
-      - https://www.youtube.com/watch?v=u7K72X4eo_s
+      - "https://www.youtube.com/watch?v=u7K72X4eo_s"
     playlists:
-      - https://www.youtube.com/watch?v=5dWeeUIZFgA&list=RDEMtbC_BXEtvKp9p_L81bzVwA&start_radio=1
+      - "https://www.youtube.com/watch?v=5dWeeUIZFgA&list=RDEMtbC_BXEtvKp9p_L81bzVwA&start_radio=1"
 ----
 
 ==== Structure YAML
