@@ -60,6 +60,13 @@ open class DownloadMusicTask : DefaultTask() {
     @get:Input
     var ffmpegDockerImage: String = NewpipeExtension.DEFAULT_FFMPEG_IMAGE
 
+    /**
+     * When true, bypasses the local FFmpeg probe and forces Docker strategy.
+     * Injected by [NewpipeManager] from [NewpipeExtension.forceDocker].
+     */
+    @get:Input
+    var forceDocker: Boolean = false
+
     // ------------------------------------------------------------------
     // Optional CLI overrides
     // ------------------------------------------------------------------
@@ -87,7 +94,8 @@ open class DownloadMusicTask : DefaultTask() {
         if (isMockMode) FakeVideoInfoProvider() else YouTubeDownloader()
 
     private fun newAudioConverter(): AudioConverter =
-        if (isMockMode) FakeAudioConverter() else Mp3Converter(dockerImage = ffmpegDockerImage)
+        if (isMockMode) FakeAudioConverter()
+        else Mp3Converter(dockerImage = ffmpegDockerImage, forceDocker = forceDocker)
 
     // ------------------------------------------------------------------
     // Data classes for the two-phase pipeline
