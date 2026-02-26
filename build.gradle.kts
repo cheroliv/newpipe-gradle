@@ -7,6 +7,6 @@ repositories {
 
 newpipe {
     configPath = file("musics.yml").absolutePath
-    // optionnel — défaut : "jrottenberg/ffmpeg:4.4-alpine"
     ffmpegDockerImage = "jrottenberg/ffmpeg:8-scratch"
+    forceDocker = true   // ← force Docker even if ffmpeg is locally installed
 }
