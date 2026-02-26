@@ -6,9 +6,11 @@ import org.jaudiotagger.audio.AudioFileIO
 import org.jaudiotagger.tag.FieldKey
 import org.jaudiotagger.tag.images.ArtworkFactory
 import org.slf4j.LoggerFactory
+import org.slf4j.LoggerFactory.getLogger
 import java.io.File
 import java.net.URI
 import java.time.Year
+import kotlin.math.abs
 
 /**
  * Real implementation of [AudioConverter].
@@ -30,7 +32,7 @@ class Mp3Converter(
     private val forceDocker: Boolean = false
 ) : AudioConverter {
 
-    private val logger = LoggerFactory.getLogger(Mp3Converter::class.java)
+    private val logger = getLogger(Mp3Converter::class.java)
 
     // Resolved once — avoids repeated process checks on every track
     private val strategy: FfmpegStrategy = resolveStrategy()
@@ -72,7 +74,7 @@ class Mp3Converter(
 
             // Duration check via audio header
             val existingDuration = audioFile.audioHeader.trackLength.toLong()
-            val durationMatch = Math.abs(existingDuration - youtubeDurationSeconds) <= toleranceSeconds
+            val durationMatch = abs(existingDuration - youtubeDurationSeconds) <= toleranceSeconds
 
             val match = existingTitle == title && existingArtist == artist && durationMatch
             if (match) logger.info("⏭ Skipping already downloaded track: ${mp3File.name}")
