@@ -205,7 +205,7 @@ gradlePlugin {
             implementationClass = "${libs.plugins.newpipe.get().pluginId}.DownloaderPlugin"
             displayName = "NewPipe Downloader Plugin"
             description = "Gradle plugin for downloading with newpipe and converting to MP3."
-            tags.set(listOf("newpipe", "downloader", "plugin", "gradle", "mp3", "kotlin-dsl"))
+            tags.set(listOf("newpipe", "downloader", "m4a", "ffmpeg", "docker", "mp3", "kotlin-dsl"))
         }
     }
     website = "https://cheroliv.com"
