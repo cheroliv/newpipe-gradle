@@ -1,6 +1,6 @@
 = newpipe-plugin
 :toc: left
-:toc-title: Sommaire
+:toc-title: Contents
 :toclevels: 3
 :icons: font
 :source-highlighter: highlight.js
@@ -8,8 +8,8 @@
 
 ++++
 <p align="right">
-  <a href="README.adoc">
-    <img src="images/lang-en-blue.svg" alt="English" width="64"/>
+  <a href="README_fr.adoc">
+    <img src="images/lang-fr-red.svg" alt="Français" width="64"/>
   </a>
 </p>
 ++++
@@ -19,19 +19,19 @@ image:https://img.shields.io/badge/Gradle-8.x-02303A?logo=gradle[Gradle]
 image:https://img.shields.io/badge/JitPack-published-brightgreen[JitPack]
 image:https://img.shields.io/badge/License-Apache%202.0-blue.svg[License]
 
-Plugin Gradle (`com.cheroliv.newpipe`) qui télécharge de la musique depuis
-YouTube et la convertit en MP3 — sans dépendance Python, en pur JVM.
+A Gradle plugin (`com.cheroliv.newpipe`) that downloads music from YouTube
+and converts it to MP3 — no Python dependency, pure JVM.
 
-== Proposition de valeur
+== Value Proposition
 
-Dans un écosystème JVM, intégrer `yt-dlp` impose Python, `pip` et la gestion
-de versions Python entre machines et agents CI. Ce plugin élimine cette
-friction : une seule dépendance Gradle, zéro outil système obligatoire en
-dehors de FFmpeg (ou Docker).
+In a JVM ecosystem, integrating `yt-dlp` requires Python, `pip`, and Python
+version management across machines and CI agents. This plugin eliminates that
+friction: a single Gradle dependency, zero mandatory system tools beyond
+FFmpeg (or Docker).
 
 == Architecture
 
-=== Vue d'ensemble
+=== Overview
 
 [source,text]
 ----
@@ -39,23 +39,23 @@ newpipe-plugin/
 └── newpipe/
     └── src/
         ├── main/kotlin/com/cheroliv/newpipe/
-        │   ├── DownloaderPlugin.kt      Point d'entrée du plugin
-        │   ├── NewpipeExtension.kt      Extension DSL (configPath)
-        │   ├── NewpipeManager.kt        Enregistrement des tâches + parsing YAML
-        │   ├── Models.kt                Data classes Selection / Artist
-        │   ├── DownloadMusicTask.kt     Tâche Gradle principale
-        │   ├── VideoServices.kt         Interfaces VideoInfoProvider / AudioConverter
-        │   ├── VideoMetadata.kt         Data class découplée de StreamInfo
-        │   ├── YouTubeDownloader.kt     Implémentation réelle (NewPipe + OkHttp)
-        │   ├── Mp3Converter.kt          Implémentation réelle (FFmpeg + jaudiotagger)
+        │   ├── DownloaderPlugin.kt      Plugin entry point
+        │   ├── NewpipeExtension.kt      DSL extension (configPath, ffmpegDockerImage, forceDocker)
+        │   ├── NewpipeManager.kt        Task registration + YAML parsing
+        │   ├── Models.kt                Selection / Artist data classes
+        │   ├── DownloadMusicTask.kt     Main Gradle task
+        │   ├── VideoServices.kt         VideoInfoProvider / AudioConverter interfaces
+        │   ├── VideoMetadata.kt         Data class decoupled from StreamInfo
+        │   ├── YouTubeDownloader.kt     Real implementation (NewPipe + OkHttp)
+        │   ├── Mp3Converter.kt          Real implementation (FFmpeg / Docker + jaudiotagger)
         │   └── DownloaderImpl.kt        NewPipe Downloader (OkHttp singleton)
         └── test/kotlin/com/cheroliv/newpipe/
-            ├── FakeVideoInfoProvider.kt Fake sans réseau pour les tests
-            ├── FakeAudioConverter.kt    Fake sans FFmpeg pour les tests
-            └── scenarios/              Tests Cucumber (GradleTestKit)
+            ├── FakeVideoInfoProvider.kt Network-free fake for tests
+            ├── FakeAudioConverter.kt    FFmpeg-free fake for tests
+            └── scenarios/              Cucumber tests (GradleTestKit)
 ----
 
-=== Flux d'exécution
+=== Execution Flow
 
 [source,text]
 ----
@@ -67,29 +67,29 @@ NewpipeManager.registerDownloadTask()
     ▼
 DownloadMusicTask.download()
     │
-    ├── Résolution des playlists (séquentielle)
+    ├── Playlist resolution (sequential)
     │     └── VideoInfoProvider.getPlaylistVideoUrls()
-    │           ├── Mix Radio (list=RD...) → première page (~15 pistes)
-    │           └── Playlist standard     → toutes les pages (cap 50)
+    │           ├── Mix Radio (list=RD...) → first page only (~15 tracks)
+    │           └── Standard playlist     → all pages (cap at 50)
     │
-    └── Pipeline concurrent (Semaphore 3) pour chaque URL
+    └── Concurrent pipeline (Semaphore 3) for each URL
           │
           ├── fetchAudio()
           │     ├── VideoInfoProvider.getVideoInfo()      → VideoMetadata
-          │     ├── AudioConverter.alreadyDownloaded()    → skip si doublon
+          │     ├── AudioConverter.alreadyDownloaded()    → skip if duplicate
           │     └── VideoInfoProvider.downloadBestAudio() → _temp.m4a
           │
-          └── convertTrack() — immédiatement après le download
+          └── convertTrack() — immediately after download completes
                 ├── AudioConverter.convertToMp3()         → FFmpeg 192k
-                └── AudioConverter.addMetadata()          → tags ID3 + cover
+                └── AudioConverter.addMetadata()          → ID3 tags + cover
 ----
 
-== Composants principaux
+== Core Components
 
 === VideoInfoProvider / AudioConverter
 
-Deux interfaces permettent de substituer les implémentations réelles par des
-fakes en test sans franchir la frontière JVM de GradleTestKit.
+Two interfaces allow real implementations to be swapped for fakes in tests
+without crossing the GradleTestKit JVM boundary.
 
 [source,kotlin]
 ----
@@ -115,8 +115,9 @@ interface AudioConverter {
 
 === VideoMetadata
 
-Data class propre qui découple le plugin de `StreamInfo` de NewPipe Extractor
-(classe `final` non instanciable de l'extérieur).
+A clean data class that decouples the plugin from NewPipe Extractor's
+`StreamInfo` (a `final` class that cannot be instantiated from outside the
+library).
 
 [source,kotlin]
 ----
@@ -125,15 +126,98 @@ data class VideoMetadata(
     val uploaderName: String,
     val duration: Long,
     val url: String,
-    val streamInfo: StreamInfo? = null  // null en mode test
+    val streamInfo: StreamInfo? = null  // null in test mode
 )
 ----
 
-=== DownloadMusicTask — concurrence
+=== NewpipeExtension — DSL
 
-Les téléchargements sont concurrents (max 3 simultanés via `Semaphore`).
-La conversion FFmpeg démarre immédiatement après chaque téléchargement dans
-la même coroutine — les fichiers `_temp.m4a` ne s'accumulent pas.
+The DSL extension exposes three properties to the consumer's `build.gradle.kts`:
+
+[source,kotlin]
+----
+open class NewpipeExtension @Inject constructor(objects: ObjectFactory) {
+
+    // Required — absolute path to musics.yml
+    val configPath: Property<String> = objects.property(String::class.java)
+
+    // Optional — Docker image for FFmpeg conversion. Default: "jrottenberg/ffmpeg:4.4-alpine"
+    val ffmpegDockerImage: Property<String> = objects
+        .property(String::class.java)
+        .convention(DEFAULT_FFMPEG_IMAGE)
+
+    // Optional — force Docker even if FFmpeg is installed locally. Default: false
+    val forceDocker: Property<Boolean> = objects
+        .property(Boolean::class.java)
+        .convention(false)
+}
+----
+
+[cols="1,2,1,2", options="header"]
+|===
+| Property | Type | Default | Description
+
+| `configPath`
+| `String`
+| —
+| *Required.* Absolute path to the `musics.yml` selection file.
+
+| `ffmpegDockerImage`
+| `String`
+| `jrottenberg/ffmpeg:4.4-alpine`
+| Docker image used for conversion when FFmpeg is not installed locally,
+or when `forceDocker = true`.
+
+| `forceDocker`
+| `Boolean`
+| `false`
+| When `true`, skips the local FFmpeg probe and always uses Docker,
+even if `ffmpeg` is available on the system `PATH`.
+|===
+
+=== Mp3Converter — FFmpeg Strategy
+
+The conversion strategy is resolved *once at construction*, in priority order:
+
+[cols="1,1,3", options="header"]
+|===
+| Priority | Strategy | Condition
+
+| 1
+| `LOCAL`
+| `ffmpeg -version` exits 0 *and* `forceDocker = false`
+
+| 2
+| `DOCKER`
+| `docker info` exits 0 (daemon running)
+
+| 3
+| `NONE`
+| Neither available → `ConversionException` at conversion time
+|===
+
+When the `DOCKER` strategy is active, the plugin runs:
+
+[source,bash]
+----
+docker run --rm \
+  --user <current-uid>:<current-gid> \
+  -v <artist-dir>:/data \
+  <ffmpegDockerImage> \
+  -i /data/<input.m4a> -vn -ar 44100 -ac 2 -b:a 192k -y \
+  /data/<output.mp3>
+----
+
+The `--user` flag ensures the MP3 is owned by the user running Gradle (not the
+container's root), preventing permission errors when jaudiotagger writes the
+ID3 tags. Both the temp file and the output MP3 share the same artist directory,
+so a single volume mount covers both.
+
+=== DownloadMusicTask — Concurrency
+
+Downloads are concurrent (up to 3 at a time via `Semaphore`). FFmpeg
+conversion starts immediately after each download in the same coroutine —
+`_temp.m4a` files do not accumulate.
 
 [source,kotlin]
 ----
@@ -143,17 +227,17 @@ allEntries.map { (artistHint, tuneUrl) ->
     async(Dispatchers.IO) {
         semaphore.withPermit {
             val track = fetchAudio(tuneUrl, artistHint, baseOutputDir, label)
-            convertTrack(converter, track)  // conversion immédiate
+            convertTrack(converter, track)  // immediate conversion
         }
     }
 }.awaitAll()
 ----
 
-=== DownloaderImpl — OkHttp singleton
+=== DownloaderImpl — OkHttp Singleton
 
-Un seul `OkHttpClient` est partagé entre l'extraction des métadonnées
-(NewPipe Extractor) et le téléchargement audio — évitant les doubles
-négociations TCP/TLS et la multiplication des pools de threads.
+A single `OkHttpClient` is shared between metadata extraction (NewPipe
+Extractor) and audio download — avoiding redundant TCP/TLS handshakes and
+thread pool multiplication.
 
 [source,kotlin]
 ----
@@ -166,17 +250,17 @@ companion object {
 }
 ----
 
-Le buffer de téléchargement est de 128 Ko pour minimiser les appels système.
+The download buffer is 128 KB to minimise kernel syscall overhead.
 
-== Stratégie de test
+== Testing Strategy
 
-=== Problème
+=== The Problem
 
-GradleTestKit exécute le plugin dans une JVM séparée — Mockito ne peut pas
-franchir cette frontière. Les vrais téléchargements YouTube + FFmpeg rendent
-les tests Cucumber lents (2+ minutes par scénario).
+GradleTestKit runs the plugin in a separate JVM — Mockito cannot cross that
+boundary. Real YouTube downloads + FFmpeg make Cucumber tests slow (2+ minutes
+per scenario).
 
-=== Solution — system property + fakes
+=== Solution — System Property + Fakes
 
 [source,kotlin]
 ----
@@ -192,63 +276,62 @@ private fun newInfoProvider(): VideoInfoProvider =
 
 [source,kotlin]
 ----
-// TestWorld.kt — le flag est passé automatiquement à GradleRunner
+// TestWorld.kt — flag is passed automatically to GradleRunner
 .withArguments(tasks + "--stacktrace" + "-D${DownloadMusicTask.MOCK_PROPERTY}=true")
 ----
 
-Les fakes retournent des données fixes instantanément — aucun appel réseau,
-aucun FFmpeg. Les tests vérifient la structure des dossiers, le nommage des
-fichiers, le skip des doublons et la gestion des erreurs en moins d'une
-seconde par scénario.
+Fakes return fixed data instantly — no network calls, no FFmpeg. Tests verify
+folder structure, file naming, duplicate skipping and error handling in under
+a second per scenario.
 
-=== Lancer les tests
+=== Running Tests
 
 [source,bash]
 ----
-# Tests Cucumber uniquement
+# Cucumber tests only
 ./gradlew cucumberTest
 
-# Tous les tests
+# All tests
 ./gradlew check
 ----
 
-== Dépendances
+== Dependencies
 
 [cols="2,1,2", options="header"]
 |===
-| Dépendance | Version | Rôle
+| Dependency | Version | Role
 
 | `com.github.TeamNewPipe:NewPipeExtractor`
-| branche `dev`
-| Extraction YouTube (métadonnées + flux audio)
+| `dev` branch
+| YouTube extraction (metadata + audio streams)
 
 | `com.squareup.okhttp3:okhttp`
 | 4.x
-| Client HTTP (partagé entre extraction et téléchargement)
+| HTTP client (shared between extraction and download)
 
 | `org.jaudiotagger:jaudiotagger`
 | 2.x
-| Écriture des tags ID3 et cover art
+| ID3 tag and cover art writing
 
 | `com.fasterxml.jackson.dataformat:jackson-dataformat-yaml`
 | 2.x
-| Parsing de `musics.yml`
+| `musics.yml` parsing
 
 | `org.jetbrains.kotlinx:kotlinx-coroutines-core`
 | 1.x
-| Concurrence (async/await, Semaphore, Dispatchers.IO)
+| Concurrency (async/await, Semaphore, Dispatchers.IO)
 |===
 
 [NOTE]
 ====
-NewPipe Extractor est résolu via https://jitpack.io[JitPack]. La version
-pointe sur la branche `dev` pour bénéficier des derniers correctifs
-anti-throttling YouTube.
+NewPipe Extractor is resolved via https://jitpack.io[JitPack]. The version
+points to the `dev` branch to benefit from the latest YouTube anti-throttling
+fixes.
 ====
 
-== Build et publication
+== Build & Publishing
 
-=== Build local
+=== Local Build
 
 [source,bash]
 ----
@@ -256,22 +339,22 @@ cd newpipe-plugin
 ./gradlew build
 ----
 
-=== Publication en local (pour tests consommateur)
+=== Publish Locally (for consumer testing)
 
 [source,bash]
 ----
 ./gradlew publishToMavenLocal
 ----
 
-=== Publication Maven Central
+=== Publish to Maven Central
 
-La publication requiert des credentials Sonatype et une clé GPG configurés
-dans `~/.gradle/gradle.properties` :
+Publishing requires Sonatype credentials and a GPG key configured in
+`~/.gradle/gradle.properties`:
 
 [source,properties]
 ----
-ossrhUsername=<votre-username>
-ossrhPassword=<votre-password>
+ossrhUsername=<your-username>
+ossrhPassword=<your-password>
 ----
 
 [source,bash]
@@ -279,24 +362,24 @@ ossrhPassword=<votre-password>
 ./gradlew publish
 ----
 
-== Problèmes connus
+== Known Issues
 
-=== Throttling YouTube
+=== YouTube Throttling
 
-YouTube applique un throttling aux clients non officiels via le paramètre `n`
-de l'URL de flux. En cas de lenteur anormale sur une connexion fibre, bumper
-la dépendance vers le dernier commit `dev` de NewPipe Extractor est la
-première action à entreprendre.
+YouTube throttles unofficial clients via the `n` parameter in the stream URL.
+If downloads are abnormally slow on a fast connection, bumping the dependency
+to the latest `dev` commit of NewPipe Extractor is the first step.
 
 === Mix Radio (list=RD...)
 
-Les playlists Mix Radio sont générées dynamiquement par YouTube et ne peuvent
-pas être paginées au-delà de la première page. La pagination complète n'est
-pas possible sans l'API officielle YouTube.
+YouTube Mix Radio playlists are dynamically generated and cannot be paginated
+beyond the first page. Full enumeration is not possible without the official
+YouTube API.
 
-== Feuille de route
+== Roadmap
 
-* [ ] Support FFmpeg via Docker (zéro dépendance système)
-* [ ] Configurer l'image Docker via le DSL (`ffmpegDockerImage`)
-* [ ] Tests d'intégration taggés `@integration` (vrais téléchargements, CI nightly)
-* [ ] Rapport de téléchargement en fin de tâche (résumé JSON/HTML)
+* [x] FFmpeg via Docker support (zero system dependency)
+* [x] Configure the Docker image via the DSL (`ffmpegDockerImage`)
+* [x] Force Docker even when FFmpeg is installed locally (`forceDocker`)
+* [ ] Integration tests tagged `@integration` (real downloads, nightly CI)
+* [ ] Download report at end of task (JSON/HTML summary)
