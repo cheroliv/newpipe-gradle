@@ -31,13 +31,9 @@ de la musique depuis YouTube et la convertir en MP3, sans dépendance Python.
 | Runtime Gradle et plugin
 | ✅
 
-| Docker _ou_ FFmpeg local
+| FFmpeg _ou_ Docker
 | Conversion audio en MP3
 | ✅ (l'un ou l'autre)
-
-| Docker
-| Alternative à FFmpeg système
-| ⬜ optionnel
 |===
 
 [NOTE]
@@ -96,6 +92,8 @@ include("newpipe")
 
 === build.gradle.kts
 
+Configuration minimale — seul `configPath` est obligatoire :
+
 [source,kotlin]
 ----
 plugins {
@@ -106,6 +104,54 @@ newpipe {
     configPath = file("musics.yml").absolutePath
 }
 ----
+
+Configuration complète avec toutes les options disponibles :
+
+[source,kotlin]
+----
+plugins {
+    id("com.cheroliv.newpipe") version "1.0.0"
+}
+
+newpipe {
+    // Obligatoire — chemin vers le fichier de sélection YAML
+    configPath = file("musics.yml").absolutePath
+
+    // Optionnel — image Docker utilisée pour la conversion FFmpeg.
+    // Défaut : "jrottenberg/ffmpeg:4.4-alpine"
+    // Utilisée uniquement si FFmpeg n'est pas installé localement,
+    // OU si forceDocker = true.
+    ffmpegDockerImage = "jrottenberg/ffmpeg:8-scratch"
+
+    // Optionnel — force Docker même si FFmpeg est installé localement.
+    // Utile pour des builds reproductibles ou en CI. Défaut : false
+    forceDocker = true
+}
+----
+
+==== Référence DSL
+
+[cols="1,2,1,2", options="header"]
+|===
+| Propriété | Type | Défaut | Description
+
+| `configPath`
+| `String`
+| —
+| *Obligatoire.* Chemin absolu vers le fichier de sélection `musics.yml`.
+
+| `ffmpegDockerImage`
+| `String`
+| `jrottenberg/ffmpeg:4.4-alpine`
+| Image Docker utilisée pour la conversion quand FFmpeg n'est pas installé
+localement, ou quand `forceDocker = true`.
+
+| `forceDocker`
+| `Boolean`
+| `false`
+| Quand `true`, ignore la détection locale de FFmpeg et utilise toujours Docker,
+même si `ffmpeg` est présent dans le `PATH` système.
+|===
 
 === musics.yml
 
@@ -155,6 +201,52 @@ Le nom de l'artiste vient du tag uploader de la vidéo YouTube.
 Ces playlists sont générées dynamiquement. Le plugin récupère automatiquement
 la première page (~15 pistes) et s'arrête, sans boucle infinie.
 ====
+
+== Stratégie FFmpeg
+
+Le plugin résout la stratégie de conversion *une seule fois au démarrage*,
+dans cet ordre de priorité :
+
+[cols="1,1,3", options="header"]
+|===
+| Priorité | Stratégie | Condition
+
+| 1
+| `LOCAL`
+| `ffmpeg -version` retourne 0 *et* `forceDocker = false`
+
+| 2
+| `DOCKER`
+| `docker info` retourne 0 (daemon en cours d'exécution)
+
+| 3
+| `NONE`
+| Aucun des deux disponibles → erreur explicite à la conversion
+|===
+
+Mettre `forceDocker = true` ignore entièrement la priorité 1, que `ffmpeg`
+soit installé ou non.
+
+=== Détails de la conversion Docker
+
+Lorsque la stratégie `DOCKER` est sélectionnée, le plugin exécute :
+
+[source,bash]
+----
+docker run --rm \
+  --user <uid-courant>:<gid-courant> \
+  -v <dossier-artiste>:/data \
+  <ffmpegDockerImage> \
+  -i /data/<input.m4a> -vn -ar 44100 -ac 2 -b:a 192k -y \
+  /data/<output.mp3>
+----
+
+Le flag `--user` garantit que le MP3 produit appartient à l'utilisateur qui
+lance Gradle, et non à l'utilisateur root du conteneur. Cela évite les erreurs
+de permissions lorsque jaudiotagger écrit les tags ID3 après la conversion.
+
+Le fichier temporaire (`_temp.m4a`) et le MP3 de sortie sont tous deux placés
+dans le même dossier artiste, qu'un seul montage de volume couvre entièrement.
 
 == Utilisation
 
@@ -213,7 +305,7 @@ s'accumulent pas.
 
 Avant chaque téléchargement, le plugin vérifie si un MP3 identique existe
 déjà via les tags ID3 (titre, artiste) et la durée audio (tolérance ±2s).
-Si le fichier est identique, il est ignoré.
+Si le fichier est identique, il est ignoré silencieusement.
 
 === Reprise après interruption
 
@@ -253,6 +345,9 @@ avec seulement les caractères interdits par le système de fichiers remplacés.
 | `ALBUM`
 | `YouTube`
 
+| `YEAR`
+| Année courante
+
 | `COVER`
 | Miniature de la vidéo YouTube
 |===
@@ -287,6 +382,8 @@ newpipe-extractor = "abc1234567"  # hash du dernier commit dev
 
 === FFmpeg introuvable
 
+Installer FFmpeg localement :
+
 [source,bash]
 ----
 # Debian / Ubuntu
@@ -297,4 +394,36 @@ brew install ffmpeg
 
 # Arch Linux
 sudo pacman -S ffmpeg
+----
+
+Ou configurer le plugin pour utiliser Docker (aucun FFmpeg local requis) :
+
+[source,kotlin]
+----
+newpipe {
+    configPath        = file("musics.yml").absolutePath
+    ffmpegDockerImage = "jrottenberg/ffmpeg:4.4-alpine"
+    forceDocker       = true
+}
+----
+
+=== Permission refusée sur le fichier MP3 (stratégie Docker)
+
+Si vous obtenez une erreur de ce type :
+
+[source,text]
+----
+Cannot modify /chemin/vers/downloads/Artiste/Artiste - Titre.mp3
+because do not have permissions to modify file
+----
+
+Cela signifie que le conteneur Docker a écrit le MP3 en tant que `root`.
+Le plugin passe automatiquement `--user $(id -u):$(id -g)` à `docker run`
+pour éviter ce problème. Si l'erreur persiste, vérifiez que votre version
+du daemon Docker supporte le flag `--user` et que votre utilisateur a bien
+les droits en écriture sur le dossier `downloads/` :
+
+[source,bash]
+----
+chmod -R u+w downloads/
 ----
