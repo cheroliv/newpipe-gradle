@@ -146,8 +146,11 @@ open class DownloadMusicTask : DefaultTask() {
                         logger.info("  → ${urls.size} video(s) found")
                         urls.forEach { videoUrl -> add(null to videoUrl) }
                     }.onFailure { e ->
-                        if (e.isNotFound()) logger.warn("⏭ Playlist not found, skipping: $playlistUrl")
-                        else logger.error("Failed to fetch playlist $playlistUrl: ${e.message}")
+                        when {
+                            e.isNotFound()    -> logger.warn("⏭ Playlist not found, skipping: $playlistUrl")
+                            e.isUnavailable() -> logger.warn("⏭ Playlist unavailable, skipping: $playlistUrl — ${e.message}")
+                            else              -> logger.error("Failed to fetch playlist $playlistUrl: ${e.message}")
+                        }
                     }
                 }
             }
@@ -178,7 +181,8 @@ open class DownloadMusicTask : DefaultTask() {
                             }.onFailure { e ->
                                 when {
                                     e is AlreadyDownloadedException -> { /* already logged in fetchAudio */ }
-                                    e.isNotFound() -> logger.warn("⏭ Not found, skipping: $tuneUrl")
+                                    e.isNotFound()    -> logger.warn("⏭ Not found, skipping: $tuneUrl")
+                                    e.isUnavailable() -> logger.warn("⏭ Unavailable, skipping: $tuneUrl — ${e.message}")
                                     else -> {
                                         val msg = "Failed [$label] $tuneUrl: ${e.message}"
                                         logger.error(msg)
@@ -307,6 +311,10 @@ open class DownloadMusicTask : DefaultTask() {
             fetchAudio(tuneUrl, artistHint, baseOutputDir, label)
         }.getOrElse { e ->
             if (e is AlreadyDownloadedException) return
+            if (e.isNotFound() || e.isUnavailable()) {
+                logger.warn("⏭ Skipping $tuneUrl — ${e.message}")
+                return
+            }
             throw e
         }
         convertTrack(converter, track)
@@ -336,4 +344,19 @@ private fun Throwable.isNotFound(): Boolean {
             || msg.contains("private video")
             || msg.contains("this video has been removed")
             || cause?.isNotFound() == true
+}
+
+private fun Throwable.isUnavailable(): Boolean {
+    val msg = message?.lowercase() ?: return false
+    return msg.contains("no audio streams available")
+            || msg.contains("no audio stream")
+            || msg.contains("audio streams")
+            || msg.contains("no video streams")
+            || msg.contains("no streams")
+            || msg.contains("geo")
+            || msg.contains("not available in your country")
+            || msg.contains("drm")
+            || msg.contains("age")
+            || msg.contains("sign in")
+            || cause?.isUnavailable() == true
 }
