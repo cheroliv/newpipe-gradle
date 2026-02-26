@@ -40,14 +40,14 @@ newpipe-plugin/
     └── src/
         ├── main/kotlin/com/cheroliv/newpipe/
         │   ├── DownloaderPlugin.kt      Plugin entry point
-        │   ├── NewpipeExtension.kt      DSL extension (configPath)
+        │   ├── NewpipeExtension.kt      DSL extension (configPath, ffmpegDockerImage, forceDocker)
         │   ├── NewpipeManager.kt        Task registration + YAML parsing
         │   ├── Models.kt                Selection / Artist data classes
         │   ├── DownloadMusicTask.kt     Main Gradle task
         │   ├── VideoServices.kt         VideoInfoProvider / AudioConverter interfaces
         │   ├── VideoMetadata.kt         Data class decoupled from StreamInfo
         │   ├── YouTubeDownloader.kt     Real implementation (NewPipe + OkHttp)
-        │   ├── Mp3Converter.kt          Real implementation (FFmpeg + jaudiotagger)
+        │   ├── Mp3Converter.kt          Real implementation (FFmpeg / Docker + jaudiotagger)
         │   └── DownloaderImpl.kt        NewPipe Downloader (OkHttp singleton)
         └── test/kotlin/com/cheroliv/newpipe/
             ├── FakeVideoInfoProvider.kt Network-free fake for tests
@@ -129,6 +129,89 @@ data class VideoMetadata(
     val streamInfo: StreamInfo? = null  // null in test mode
 )
 ----
+
+=== NewpipeExtension — DSL
+
+The DSL extension exposes three properties to the consumer's `build.gradle.kts`:
+
+[source,kotlin]
+----
+open class NewpipeExtension @Inject constructor(objects: ObjectFactory) {
+
+    // Required — absolute path to musics.yml
+    val configPath: Property<String> = objects.property(String::class.java)
+
+    // Optional — Docker image for FFmpeg conversion. Default: "jrottenberg/ffmpeg:4.4-alpine"
+    val ffmpegDockerImage: Property<String> = objects
+        .property(String::class.java)
+        .convention(DEFAULT_FFMPEG_IMAGE)
+
+    // Optional — force Docker even if FFmpeg is installed locally. Default: false
+    val forceDocker: Property<Boolean> = objects
+        .property(Boolean::class.java)
+        .convention(false)
+}
+----
+
+[cols="1,2,1,2", options="header"]
+|===
+| Property | Type | Default | Description
+
+| `configPath`
+| `String`
+| —
+| *Required.* Absolute path to the `musics.yml` selection file.
+
+| `ffmpegDockerImage`
+| `String`
+| `jrottenberg/ffmpeg:4.4-alpine`
+| Docker image used for conversion when FFmpeg is not installed locally,
+or when `forceDocker = true`.
+
+| `forceDocker`
+| `Boolean`
+| `false`
+| When `true`, skips the local FFmpeg probe and always uses Docker,
+even if `ffmpeg` is available on the system `PATH`.
+|===
+
+=== Mp3Converter — FFmpeg Strategy
+
+The conversion strategy is resolved *once at construction*, in priority order:
+
+[cols="1,1,3", options="header"]
+|===
+| Priority | Strategy | Condition
+
+| 1
+| `LOCAL`
+| `ffmpeg -version` exits 0 *and* `forceDocker = false`
+
+| 2
+| `DOCKER`
+| `docker info` exits 0 (daemon running)
+
+| 3
+| `NONE`
+| Neither available → `ConversionException` at conversion time
+|===
+
+When the `DOCKER` strategy is active, the plugin runs:
+
+[source,bash]
+----
+docker run --rm \
+  --user <current-uid>:<current-gid> \
+  -v <artist-dir>:/data \
+  <ffmpegDockerImage> \
+  -i /data/<input.m4a> -vn -ar 44100 -ac 2 -b:a 192k -y \
+  /data/<output.mp3>
+----
+
+The `--user` flag ensures the MP3 is owned by the user running Gradle (not the
+container's root), preventing permission errors when jaudiotagger writes the
+ID3 tags. Both the temp file and the output MP3 share the same artist directory,
+so a single volume mount covers both.
 
 === DownloadMusicTask — Concurrency
 
@@ -295,7 +378,8 @@ YouTube API.
 
 == Roadmap
 
-* [ ] FFmpeg via Docker support (zero system dependency)
-* [ ] Configure the Docker image via the DSL (`ffmpegDockerImage`)
+* [x] FFmpeg via Docker support (zero system dependency)
+* [x] Configure the Docker image via the DSL (`ffmpegDockerImage`)
+* [x] Force Docker even when FFmpeg is installed locally (`forceDocker`)
 * [ ] Integration tests tagged `@integration` (real downloads, nightly CI)
 * [ ] Download report at end of task (JSON/HTML summary)
