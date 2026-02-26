@@ -35,6 +35,7 @@ newpipe { configPath = file("musics.yml").absolutePath }
 
                 outputPath = "${project.projectDir}/downloads"
                 ffmpegDockerImage = extension.ffmpegDockerImage.get()
+                forceDocker = extension.forceDocker.get()
 
                 // Flatten YAML into (artistHint, url) pairs
                 tuneEntries = selection.artistes.flatMap { artist ->
