@@ -1,5 +1,5 @@
 [versions]
-newpipe = "0.0.0"
+newpipe = "0.0.2"
 
 [libraries]
 
