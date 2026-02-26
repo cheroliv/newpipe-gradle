@@ -53,6 +53,13 @@ open class DownloadMusicTask : DefaultTask() {
     @get:Input
     var playlistUrls: List<String> = emptyList()
 
+    /**
+     * Docker image used for FFmpeg conversion when FFmpeg is not installed locally.
+     * Injected by [NewpipeManager] from [NewpipeExtension.ffmpegDockerImage].
+     */
+    @get:Input
+    var ffmpegDockerImage: String = NewpipeExtension.DEFAULT_FFMPEG_IMAGE
+
     // ------------------------------------------------------------------
     // Optional CLI overrides
     // ------------------------------------------------------------------
@@ -80,7 +87,7 @@ open class DownloadMusicTask : DefaultTask() {
         if (isMockMode) FakeVideoInfoProvider() else YouTubeDownloader()
 
     private fun newAudioConverter(): AudioConverter =
-        if (isMockMode) FakeAudioConverter() else Mp3Converter()
+        if (isMockMode) FakeAudioConverter() else Mp3Converter(dockerImage = ffmpegDockerImage)
 
     // ------------------------------------------------------------------
     // Data classes for the two-phase pipeline

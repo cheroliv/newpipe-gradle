@@ -237,9 +237,11 @@ artistes:
 
   - name: "Cheb Nasro"
     playlists:
-        - "https://www.youtube.com/watch?v=qIE5jxk5ZRA&list=RDEMuVktt3iNmym4Yqi5G9EGAw&start_radio=1"
+      - "https://www.youtube.com/watch?v=qIE5jxk5ZRA&list=RDEMuVktt3iNmym4Yqi5G9EGAw&start_radio=1"
   - name: "Amine La Colombe"
     playlists:
       - "https://www.youtube.com/watch?v=T1LzSKMN5hY&list=RDEMAv4XCPV7Z8WnvKkrXufvPg&start_radio=1"
-
+  - name: "Reda Taliani"
+    playlists:
+      - "https://www.youtube.com/watch?v=-L475c3_9vc&list=RDEMAdhjOBeCzCAXgP09tkvKXQ&start_radio=1"
 
