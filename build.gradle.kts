@@ -1,6 +1,7 @@
 plugins { alias(libs.plugins.newpipe) }
 
 repositories {
+    gradlePluginPortal()
     mavenCentral()
     maven { url = uri("https://jitpack.io") }
 }
