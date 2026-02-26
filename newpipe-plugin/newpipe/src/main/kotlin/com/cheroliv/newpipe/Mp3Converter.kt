@@ -15,16 +15,19 @@ import java.time.Year
  *
  * FFmpeg strategy (resolved once at construction, in priority order):
  *
- *  1. [FfmpegStrategy.LOCAL]  — FFmpeg found on the system PATH
+ *  1. [FfmpegStrategy.LOCAL]  — FFmpeg found on the system PATH, AND [forceDocker] is false
  *  2. [FfmpegStrategy.DOCKER] — Docker available and [dockerImage] is set
  *  3. [FfmpegStrategy.NONE]   — neither available → [ConversionException] at runtime
  *
- * @param dockerImage Docker image to pull when FFmpeg is not installed locally.
- *                    Defaults to [NewpipeExtension.DEFAULT_FFMPEG_IMAGE].
- *                    Ignored when FFmpeg is available locally.
+ * @param dockerImage  Docker image to use when FFmpeg is not installed locally.
+ *                     Defaults to [NewpipeExtension.DEFAULT_FFMPEG_IMAGE].
+ * @param forceDocker  When true, skip the local FFmpeg probe and go straight to Docker,
+ *                     even if `ffmpeg` is available on the system PATH.
+ *                     Defaults to false.
  */
 class Mp3Converter(
-    private val dockerImage: String = NewpipeExtension.DEFAULT_FFMPEG_IMAGE
+    private val dockerImage: String = NewpipeExtension.DEFAULT_FFMPEG_IMAGE,
+    private val forceDocker: Boolean = false
 ) : AudioConverter {
 
     private val logger = LoggerFactory.getLogger(Mp3Converter::class.java)
@@ -35,7 +38,7 @@ class Mp3Converter(
     private enum class FfmpegStrategy { LOCAL, DOCKER, NONE }
 
     private fun resolveStrategy(): FfmpegStrategy = when {
-        isCommandAvailable("ffmpeg", "-version") -> {
+        !forceDocker && isCommandAvailable("ffmpeg", "-version") -> {
             logger.info("FFmpeg strategy: LOCAL")
             FfmpegStrategy.LOCAL
         }
@@ -88,7 +91,12 @@ class Mp3Converter(
         logger.info("Converting to MP3: ${inputFile.name} → ${outputFile.name}")
         when (strategy) {
             FfmpegStrategy.LOCAL  -> convertLocal(inputFile, outputFile, bitrate)
-            FfmpegStrategy.DOCKER -> convertDocker(inputFile, outputFile, bitrate)
+            FfmpegStrategy.DOCKER -> {
+                convertDocker(inputFile, outputFile, bitrate)
+                // Garantir que le fichier est accessible en écriture par le process courant
+                // même si le conteneur a ignoré --user
+                if (outputFile.exists()) outputFile.setWritable(true, false)
+            }
             FfmpegStrategy.NONE   -> throw ConversionException(
                 "FFmpeg is not installed and Docker is not available. " +
                         "Install FFmpeg (apt install ffmpeg / brew install ffmpeg) " +
@@ -169,19 +177,31 @@ class Mp3Converter(
      *   -vn -ar 44100 -ac 2 -b:a <bitrate> -y
      *   /data/<outputFileName>
      * ```
+     *
+     * Note: [jrottenberg/ffmpeg] uses `ffmpeg` as its Docker entrypoint,
+     * so the arguments are passed directly without repeating the binary name.
      */
     private fun convertDocker(inputFile: File, outputFile: File, bitrate: String) {
-        // Both files must be in the same directory so one -v mount covers both
         require(inputFile.parentFile.canonicalPath == outputFile.parentFile.canonicalPath) {
             "Docker conversion requires input and output to share the same directory"
         }
 
-        val workDir      = inputFile.parentFile.canonicalPath
+        val workDir           = inputFile.parentFile.canonicalPath
         val inputInContainer  = "/data/${inputFile.name}"
         val outputInContainer = "/data/${outputFile.name}"
 
+        // Récupérer l'UID et GID du processus courant pour que le fichier
+        // créé par le conteneur appartienne au bon utilisateur
+        val uid = ProcessBuilder("id", "-u")
+            .redirectErrorStream(true).start()
+            .inputStream.bufferedReader().readText().trim()
+        val gid = ProcessBuilder("id", "-g")
+            .redirectErrorStream(true).start()
+            .inputStream.bufferedReader().readText().trim()
+
         val command = listOf(
             "docker", "run", "--rm",
+            "--user", "$uid:$gid",          // ← le conteneur écrit avec ton UID/GID
             "-v", "$workDir:/data"
         ) + listOf(dockerImage) + buildFfmpegArgs(
             inputPath  = inputInContainer,
@@ -197,22 +217,24 @@ class Mp3Converter(
      */
     private fun buildFfmpegArgs(inputPath: String, outputPath: String, bitrate: String) =
         listOf(
-            "-i",    inputPath,
-            "-vn",               // strip video stream
-            "-ar",   "44100",    // sample rate
-            "-ac",   "2",        // stereo
-            "-b:a",  bitrate,    // audio bitrate
-            "-y",                // overwrite output without asking
+            "-i",   inputPath,
+            "-vn",            // strip video stream
+            "-ar",  "44100",  // sample rate
+            "-ac",  "2",      // stereo
+            "-b:a", bitrate,  // audio bitrate
+            "-y",             // overwrite output without asking
             outputPath
         )
 
     /**
      * Runs an external process and throws [ConversionException] if it fails.
+     * FFmpeg writes progress to stderr — [redirectErrorStream] merges it into
+     * stdout so it is captured in [output] and surfaced in the log on failure.
      */
     private fun runProcess(command: List<String>, label: String) {
         logger.debug("Running: ${command.joinToString(" ")}")
         val process = ProcessBuilder(command)
-            .redirectErrorStream(true)
+            .redirectErrorStream(true)   // FFmpeg writes to stderr — merge into stdout
             .start()
 
         val output = process.inputStream.bufferedReader().readText()
