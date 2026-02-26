@@ -98,7 +98,7 @@ Minimal configuration — only `configPath` is required:
 [source,kotlin,subs="attributes+"]
 ----
 plugins {
-    id("com.cheroliv.newpipe") version "{plugin_version}"
+    id("com.cheroliv.newpipe") version ("{plugin_version}")
 }
 
 newpipe {
@@ -111,7 +111,7 @@ Full configuration with all available options:
 [source,kotlin,subs="attributes+"]
 ----
 plugins {
-    id("com.cheroliv.newpipe") version "{plugin_version}"
+    id("com.cheroliv.newpipe") version ("{plugin_version}")
 }
 
 newpipe {
