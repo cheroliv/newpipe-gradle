@@ -1,5 +1,28 @@
 artistes:
 
+  - name: "Mimoun El Oujdi"
+    playlists:
+      - "https://www.youtube.com/watch?v=lrF-kMg55qw&list=RDEM73gw5aNTtOVr0QGSk0Vm6g&start_radio=1"
+
+  - name: "Cheb Babia"
+    playlists:
+      - "https://www.youtube.com/watch?v=9z7pQTCvN7E&list=RDEMQLxdxbt5ssWGX4-gJ_3mIw&start_radio=1"
+
+  - name: "TAKTOUKA REMIX"
+    tunes:
+      - "https://www.youtube.com/watch?v=T1EpmaF0jhc"
+      - "https://www.youtube.com/watch?v=M4NnBBk4vHY"
+    playlists:
+      - "https://www.youtube.com/watch?v=ALBl44ih18E&list=PL7Cha2YXAK6T8RK2XXz4bpYwzHo2mp8XJ"
+
+  - name: "Yasman music"
+    tunes:
+      - "https://www.youtube.com/watch?v=JQwJAaA1HRw"
+
+  - name: "Frères Bouchnak"
+    playlists:
+      - "https://www.youtube.com/watch?v=Kqu2dIGQRHE&list=PLkV3ztukGcbJVVn9ISihXTOKAaNTymZJZ"
+
   - name: "Mohamed Bousmaha"
     tunes:
       - "https://www.youtube.com/watch?v=FzzEaLVEr-k"
