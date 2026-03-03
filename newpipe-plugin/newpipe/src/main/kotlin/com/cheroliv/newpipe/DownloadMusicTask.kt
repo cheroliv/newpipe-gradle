@@ -39,7 +39,6 @@ open class DownloadMusicTask : DefaultTask() {
         const val MOCK_PROPERTY = "newpipe.test.mock"
         private val isMockMode get() = System.getProperty(MOCK_PROPERTY) == "true"
 
-        // YouTube throttles aggressively above 3 simultaneous connections from the same IP
         private const val MAX_CONCURRENT_DOWNLOADS = 3
     }
 
@@ -53,17 +52,9 @@ open class DownloadMusicTask : DefaultTask() {
     @get:Input
     var playlistUrls: List<String> = emptyList()
 
-    /**
-     * Docker image used for FFmpeg conversion when FFmpeg is not installed locally.
-     * Injected by [NewpipeManager] from [NewpipeExtension.ffmpegDockerImage].
-     */
     @get:Input
     var ffmpegDockerImage: String = NewpipeExtension.DEFAULT_FFMPEG_IMAGE
 
-    /**
-     * When true, bypasses the local FFmpeg probe and forces Docker strategy.
-     * Injected by [NewpipeManager] from [NewpipeExtension.forceDocker].
-     */
     @get:Input
     var forceDocker: Boolean = false
 
@@ -101,13 +92,24 @@ open class DownloadMusicTask : DefaultTask() {
     // Data classes for the two-phase pipeline
     // ------------------------------------------------------------------
 
-    /** Holds the raw audio temp file ready for conversion. */
+    /**
+     * Holds the raw audio temp file ready for conversion.
+     *
+     * @param previousMp3Backup  When this is a quality upgrade re-download, the
+     *                           original MP3 has been renamed to this `.old` file
+     *                           so it stays out of the way during conversion.
+     *                           It is deleted after a successful conversion, or
+     *                           restored if conversion fails.
+     *                           Null for first-time downloads.
+     */
     private data class DownloadedTrack(
         val tempFile: File,
         val mp3File: File,
         val metadata: VideoMetadata,
         val artistName: String,
-        val label: String   // human-readable identifier for logs
+        val label: String,
+        val selectedBitrateKbps: Int,
+        val previousMp3Backup: File? = null
     )
 
     // ------------------------------------------------------------------
@@ -121,7 +123,6 @@ open class DownloadMusicTask : DefaultTask() {
         val baseOutputDir = if (outputPath.isNotBlank()) File(outputPath)
         else File(project.projectDir, "downloads")
 
-        // CLI --url flag: single track, no concurrency needed
         if (url.isNotBlank()) {
             runBlocking { downloadAndConvert(url, artistHint = null, baseOutputDir, label = url) }
             return
@@ -130,12 +131,9 @@ open class DownloadMusicTask : DefaultTask() {
         val hasWork = tuneEntries.isNotEmpty() || playlistUrls.isNotEmpty()
         if (!hasWork) throw GradleException("No tunes or playlists to download. Check your YAML config.")
 
-        // Flatten all URLs to download: tunes + all playlist videos
         val allEntries: List<Pair<String?, String>> = buildList {
-            // (artistHint, url)
             tuneEntries.forEach { (artist, tuneUrl) -> add(artist to tuneUrl) }
 
-            // Resolve playlist URLs synchronously first (fast — just metadata)
             if (playlistUrls.isNotEmpty()) {
                 val infoProvider = newInfoProvider()
                 playlistUrls.forEachIndexed { pIndex, playlistUrl ->
@@ -166,8 +164,6 @@ open class DownloadMusicTask : DefaultTask() {
             val semaphore = Semaphore(MAX_CONCURRENT_DOWNLOADS)
             val converter = newAudioConverter()
 
-            // Each coroutine downloads then immediately converts — no accumulation of temp files.
-            // The semaphore limits concurrent downloads; conversion runs inline after each download.
             allEntries
                 .mapIndexed { index, (artistHint, tuneUrl) ->
                     val label = "[${index + 1}/${allEntries.size}] ${artistHint ?: tuneUrl}"
@@ -196,7 +192,6 @@ open class DownloadMusicTask : DefaultTask() {
                 .awaitAll()
         }
 
-        // ── Summary ────────────────────────────────────────────────────
         logger.info("\n" + "=".repeat(60))
         if (errors.isEmpty()) {
             logger.info("✓ All downloads completed successfully.")
@@ -215,10 +210,6 @@ open class DownloadMusicTask : DefaultTask() {
     // Phase 1 — fetch audio only (no FFmpeg)
     // ------------------------------------------------------------------
 
-    /**
-     * Fetches video metadata and downloads the raw audio to a temp file.
-     * Does NOT convert — that happens sequentially in phase 2.
-     */
     private suspend fun fetchAudio(
         tuneUrl: String,
         artistHint: String?,
@@ -241,28 +232,35 @@ open class DownloadMusicTask : DefaultTask() {
         val artistDir = File(baseOutputDir, sanitizedArtist).also { it.mkdirs() }
         val mp3File   = File(artistDir, "$sanitizedArtist - $sanitizedTitle.mp3")
 
-        // Duplicate check — skip download entirely if already up to date
-        if (converter.alreadyDownloaded(mp3File, metadata.title, artistName, metadata.duration)) {
+        val bestAvailableBitrate = infoProvider.getBestAvailableBitrateKbps(metadata)
+
+        if (converter.alreadyDownloaded(
+                mp3File, metadata.title, artistName, metadata.duration,
+                bestAvailableBitrateKbps = bestAvailableBitrate
+            )
+        ) {
             throw AlreadyDownloadedException()
         }
 
         val tempFile = File(artistDir, "$sanitizedArtist - ${sanitizedTitle}_temp.m4a")
 
-        // Clean up any leftover temp file from a previous interrupted download
         if (tempFile.exists()) {
             tempFile.delete()
             logger.warn("[$label] Deleted incomplete temp file: ${tempFile.name}")
         }
 
-        // A mp3 that exists but failed alreadyDownloaded() check has corrupt/missing tags
-        // (e.g. conversion was interrupted) — delete it so it gets rebuilt cleanly
-        if (mp3File.exists()) {
-            mp3File.delete()
-            logger.warn("[$label] Deleted incomplete MP3 (tags mismatch): ${mp3File.name}")
-        }
+        // Quality upgrade path — rename the existing MP3 to a .old backup so it
+        // stays on disk while the new file downloads and converts.
+        // The backup is deleted after successful conversion, or restored on failure.
+        // First-time downloads simply delete any corrupt/incomplete leftover.
+        val previousMp3Backup: File? = if (mp3File.exists()) {
+            val backup = File(mp3File.parentFile, "${mp3File.nameWithoutExtension}.old")
+            mp3File.renameTo(backup)
+            logger.info("[$label] Backed up lower-quality MP3: ${backup.name}")
+            backup
+        } else null
 
         var lastPercent = 0
-
         infoProvider.downloadBestAudio(metadata, tempFile) { downloaded, total, percent ->
             if (percent >= lastPercent + 10) {
                 logger.info("  [$label] $percent%% (%.1f / %.1f MB)".format(
@@ -274,30 +272,51 @@ open class DownloadMusicTask : DefaultTask() {
         }
         logger.info("[$label] ✓ Download complete: ${tempFile.length() / 1024 / 1024} MB")
 
-        return DownloadedTrack(tempFile, mp3File, metadata, artistName, label)
+        return DownloadedTrack(tempFile, mp3File, metadata, artistName, label, bestAvailableBitrate, previousMp3Backup)
     }
 
     /**
-     * Converts a downloaded temp file to MP3 and writes ID3 tags.
-     * Shared by the batch phase 2 loop and the CLI single-track path.
+     * Converts a downloaded temp file to MP3 at the bitrate of the selected stream,
+     * then writes ID3 tags.
+     *
+     * On success: deletes the [DownloadedTrack.previousMp3Backup] if present.
+     * On failure: restores the backup so the lower-quality file is not lost.
      */
     private suspend fun convertTrack(converter: AudioConverter, track: DownloadedTrack) {
-        converter.convertToMp3(track.tempFile, track.mp3File, bitrate = "192k")
-        converter.addMetadata(
-            mp3File      = track.mp3File,
-            title        = track.metadata.title,
-            artist       = track.artistName,
-            album        = "YouTube",
-            thumbnailUrl = track.metadata.url
-        )
-        logger.info("✓ Saved: ${track.mp3File.absolutePath}")
+        val ffmpegBitrate = if (track.selectedBitrateKbps > 0) "${track.selectedBitrateKbps}k" else "192k"
+        try {
+            converter.convertToMp3(track.tempFile, track.mp3File, bitrate = ffmpegBitrate)
+            converter.addMetadata(
+                mp3File      = track.mp3File,
+                title        = track.metadata.title,
+                artist       = track.artistName,
+                album        = "YouTube",
+                thumbnailUrl = track.metadata.url
+            )
+            // Conversion succeeded — safe to delete the lower-quality backup
+            track.previousMp3Backup?.let { backup ->
+                if (backup.exists()) {
+                    backup.delete()
+                    logger.info("🗑 Deleted lower-quality backup: ${backup.name}")
+                }
+            }
+            logger.info("✓ Saved: ${track.mp3File.absolutePath}")
+        } catch (e: Exception) {
+            // Conversion failed — restore the backup so we don't lose the track entirely
+            track.previousMp3Backup?.let { backup ->
+                if (backup.exists()) {
+                    backup.renameTo(track.mp3File)
+                    logger.warn("↩ Restored lower-quality backup after failed conversion: ${track.mp3File.name}")
+                }
+            }
+            throw e
+        }
     }
 
-    /** Used internally to short-circuit phase 2 for already-downloaded tracks. */
     private class AlreadyDownloadedException : Exception()
 
     // ------------------------------------------------------------------
-    // CLI single-track helper (keeps both phases together for simplicity)
+    // CLI single-track helper
     // ------------------------------------------------------------------
 
     private suspend fun downloadAndConvert(
