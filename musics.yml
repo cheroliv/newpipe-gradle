@@ -1,4 +1,7 @@
 artistes:
+  - name: "El Grande Toto"
+    playlists:
+      - "https://www.youtube.com/watch?v=IABtAdP1Qp8&list=RDEMBoh7Hmg2XyQ-UJkQA74w6g&start_radio=1"
 
   - name: "Mimoun El Oujdi"
     playlists:
