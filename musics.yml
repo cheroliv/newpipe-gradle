@@ -1,4 +1,13 @@
 artistes:
+  - name: "Mr Draganov"
+    playlists:
+      - "https://www.youtube.com/watch?v=EGq-WujF5WQ&list=RDEMpWDSwtI727ajh3pjgSW67g&start_radio=1"
+  - name: "Tagne"
+    playlists:
+      - "https://www.youtube.com/playlist?list=PLmcU58nEHjznZ6nI7A9mB0zRbcNtM10jy"
+  - name: "Balti"
+    playlists:
+      - "https://www.youtube.com/watch?v=tS8nzAQg_8k&list=RDEMfdNrJNTujDlaR7Z8PXrPpg&start_radio=1"
   - name: "El Grande Toto"
     playlists:
       - "https://www.youtube.com/watch?v=IABtAdP1Qp8&list=RDEMBoh7Hmg2XyQ-UJkQA74w6g&start_radio=1"
