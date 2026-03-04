@@ -350,7 +350,7 @@ donnée, même si la conversion ou le téléchargement échoue en cours de route
 
 [source,bash]
 ----
-./gradlew download
+./gradlew -i download
 ----
 
 Les MP3 sont organisés ainsi :

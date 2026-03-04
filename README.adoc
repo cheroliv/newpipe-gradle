@@ -346,7 +346,7 @@ the conversion or download fails midway.
 
 [source,bash]
 ----
-./gradlew download
+./gradlew -i download
 ----
 
 MP3s are organised as follows:
