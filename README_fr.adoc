@@ -6,6 +6,7 @@
 :source-highlighter: highlight.js
 :hardbreaks-option:
 :plugin_version: 0.0.3
+:pipe_commit: 4701a17
 
 ++++
 <p align="right">
@@ -373,11 +374,11 @@ YouTube applique un throttling aux clients non officiels. Ce comportement est
 lié à la version de NewPipe Extractor utilisée. Pour pointer sur la dernière
 version de la branche `dev` :
 
-[source,toml]
+[source,toml,subs="attributes+"]
 ----
 # gradle/libs.versions.toml
 [versions]
-newpipe-extractor = "abc1234567"  # hash du dernier commit dev
+newpipe-extractor = "{pipe_commit}"  # hash du dernier commit dev
 # https://github.com/TeamNewPipe/NewPipeExtractor/commits/dev
 ----
 
