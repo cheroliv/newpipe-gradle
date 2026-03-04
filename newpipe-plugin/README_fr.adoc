@@ -76,13 +76,19 @@ DownloadMusicTask.download()
     └── Concurrent pipeline (Semaphore 3) for each URL
           │
           ├── fetchAudio()
-          │     ├── VideoInfoProvider.getVideoInfo()      → VideoMetadata
-          │     ├── AudioConverter.alreadyDownloaded()    → skip if duplicate
-          │     └── VideoInfoProvider.downloadBestAudio() → _temp.m4a
+          │     ├── VideoInfoProvider.getVideoInfo()          → VideoMetadata
+          │     ├── VideoInfoProvider.getBestAvailableBitrateKbps() → int (kbps)
+          │     ├── AudioConverter.alreadyDownloaded()        → skip or upgrade
+          │     │     └── quality upgrade → rename .mp3 → .old (backup)
+          │     └── VideoInfoProvider.downloadBestAudio()     → _temp.m4a
+          │           └── stream selected: 320k → 256k → 192k → 160k → fallback
           │
           └── convertTrack() — immediately after download completes
-                ├── AudioConverter.convertToMp3()         → FFmpeg 192k
-                └── AudioConverter.addMetadata()          → ID3 tags + cover
+                ├── AudioConverter.convertToMp3()             → FFmpeg <bitrate>k
+                ├── AudioConverter.addMetadata()              → ID3 tags + cover
+                │     └── full pass, then minimal fallback (title+artist) if needed
+                └── on success → delete .old backup
+                    on failure → restore .old as .mp3
 ----
 
 == Core Components
@@ -103,14 +109,30 @@ interface VideoInfoProvider {
         onProgress: (downloaded: Long, total: Long, percent: Int) -> Unit
     ): File
     fun sanitizeFileName(name: String): String
+
+    // Returns the bitrate (kbps) of the best stream available for this metadata.
+    // Returns 0 in fake/test mode — disables the quality upgrade check.
+    fun getBestAvailableBitrateKbps(metadata: VideoMetadata): Int
 }
 
 interface AudioConverter {
-    fun alreadyDownloaded(mp3File: File, title: String, artist: String,
-                          youtubeDurationSeconds: Long, toleranceSeconds: Long = 2L): Boolean
+    // bestAvailableBitrateKbps = 0 disables the quality upgrade check (fake/test mode).
+    fun alreadyDownloaded(
+        mp3File: File,
+        title: String,
+        artist: String,
+        youtubeDurationSeconds: Long,
+        toleranceSeconds: Long = 2L,
+        bestAvailableBitrateKbps: Int = 0
+    ): Boolean
     suspend fun convertToMp3(inputFile: File, outputFile: File, bitrate: String = "192k"): File
-    suspend fun addMetadata(mp3File: File, title: String?, artist: String?,
-                            album: String?, thumbnailUrl: String?): File
+    suspend fun addMetadata(
+        mp3File: File,
+        title: String?,
+        artist: String?,
+        album: String?,
+        thumbnailUrl: String?
+    ): File
 }
 ----
 
@@ -205,7 +227,7 @@ docker run --rm \
   --user <current-uid>:<current-gid> \
   -v <artist-dir>:/data \
   <ffmpegDockerImage> \
-  -i /data/<input.m4a> -vn -ar 44100 -ac 2 -b:a 192k -y \
+  -i /data/<input.m4a> -vn -ar 44100 -ac 2 -b:a <bitrate>k -y \
   /data/<output.mp3>
 ----
 
@@ -213,6 +235,96 @@ The `--user` flag ensures the MP3 is owned by the user running Gradle (not the
 container's root), preventing permission errors when jaudiotagger writes the
 ID3 tags. Both the temp file and the output MP3 share the same artist directory,
 so a single volume mount covers both.
+
+The `<bitrate>` value is the actual bitrate of the selected YouTube stream —
+not a fixed constant — ensuring the conversion faithfully preserves the
+source quality.
+
+=== Mp3Converter — Duplicate Detection and Quality Upgrade
+
+`alreadyDownloaded()` checks three criteria before deciding to skip a track:
+
+[cols="1,3", options="header"]
+|===
+| Criterion | Detail
+
+| ID3 tags
+| `TITLE` and `ARTIST` tags must match the YouTube metadata exactly
+
+| Duration
+| Encoded duration must be within ±2 seconds of the YouTube video duration
+
+| Bitrate
+| Encoded bitrate must be within 32 kbps of the best available YouTube stream.
+A gap > 32 kbps triggers a quality upgrade re-download.
+|===
+
+The 32 kbps threshold absorbs normal FFmpeg encoding variance (a 320 kbps
+stream typically produces 315–318 kbps encoded). Only a meaningful quality
+gap triggers a re-download.
+
+==== Tag writing — two-pass strategy
+
+`addMetadata()` writes ID3 tags in two passes to avoid losing a file on error:
+
+. *Full pass* — title, artist, album, year, cover art. Throws on any error.
+. *Minimal fallback* — title and artist only, if the full pass threw.
+. If both passes fail, the MP3 is kept without tags rather than failing the
+download entirely — a warning is logged.
+
+=== Mp3Converter — Quality Upgrade Safety
+
+When `alreadyDownloaded()` detects a quality upgrade opportunity, the existing
+MP3 is not deleted immediately. Instead, `DownloadMusicTask` manages a safe
+three-phase process:
+
+[source,text]
+----
+1. Rename <name>.mp3 → <name>.old   (backup before download starts)
+2. Download new stream + convert to MP3
+3. Success → delete <name>.old
+   Failure → restore <name>.old as <name>.mp3
+----
+
+At no point is the user left without an audio file for a given track.
+
+=== YouTubeDownloader — Audio Stream Selection
+
+`downloadBestAudio()` selects the best audio stream using a descending bitrate
+ladder. Format (m4a, webm, opus…) is intentionally ignored — FFmpeg converts
+regardless of source format.
+
+[cols="1,1,2", options="header"]
+|===
+| Priority | Target | Selection rule
+
+| 1
+| 320 kbps
+| Lowest stream with `averageBitrate >= 320`
+
+| 2
+| 256 kbps
+| Lowest stream with `averageBitrate >= 256`
+
+| 3
+| 192 kbps
+| Lowest stream with `averageBitrate >= 192`
+
+| 4
+| 160 kbps
+| Lowest stream with `averageBitrate >= 160`
+
+| Fallback
+| Best available
+| Highest bitrate stream — warning logged
+|===
+
+"Lowest stream >= target" avoids overkill: a 256 kbps stream is preferred over
+a 320 kbps stream when the target is 256 kbps.
+
+`getBestAvailableBitrateKbps()` reuses the same selection logic without
+downloading, so `alreadyDownloaded()` can perform the quality comparison before
+any network I/O.
 
 === DownloadMusicTask — Concurrency
 
@@ -233,6 +345,11 @@ allEntries.map { (artistHint, tuneUrl) ->
     }
 }.awaitAll()
 ----
+
+The `DownloadedTrack` data class carries `selectedBitrateKbps` (the bitrate of
+the chosen YouTube stream) and `previousMp3Backup` (the `.old` file reference
+during a quality upgrade), keeping all state local to the pipeline without
+shared mutable state.
 
 === DownloaderImpl — OkHttp Singleton
 
@@ -285,6 +402,10 @@ Fakes return fixed data instantly — no network calls, no FFmpeg. Tests verify
 folder structure, file naming, duplicate skipping and error handling in under
 a second per scenario.
 
+`FakeVideoInfoProvider.getBestAvailableBitrateKbps()` always returns `0`,
+which disables the quality upgrade check in `alreadyDownloaded()` —
+intentional, as upgrade logic depends on real stream data.
+
 === Running Tests
 
 [source,bash]
@@ -303,31 +424,33 @@ a second per scenario.
 | Dependency | Version | Role
 
 | `com.github.TeamNewPipe:NewPipeExtractor`
-| `dev` branch
+| `dev` commit
 | YouTube extraction (metadata + audio streams)
 
 | `com.squareup.okhttp3:okhttp`
-| 4.x
+| 5.3.2
 | HTTP client (shared between extraction and download)
 
-| `org.jaudiotagger:jaudiotagger`
-| 2.x
+| `net.jthink:jaudiotagger`
+| 3.0.1
 | ID3 tag and cover art writing
 
 | `com.fasterxml.jackson.dataformat:jackson-dataformat-yaml`
-| 2.x
+| 2.21.x
 | `musics.yml` parsing
 
 | `org.jetbrains.kotlinx:kotlinx-coroutines-core`
-| 1.x
+| 1.10.2
 | Concurrency (async/await, Semaphore, Dispatchers.IO)
 |===
 
 [NOTE]
 ====
 NewPipe Extractor is resolved via https://jitpack.io[JitPack]. The version
-points to the `dev` branch to benefit from the latest YouTube anti-throttling
-fixes.
+points to a specific `dev` commit rather than a stable tag, to benefit from
+the latest YouTube anti-throttling fixes. See
+https://github.com/TeamNewPipe/NewPipeExtractor/commits/dev[the dev branch]
+for the latest commit hash.
 ====
 
 == Build & Publishing
@@ -382,5 +505,9 @@ YouTube API.
 * [x] FFmpeg via Docker support (zero system dependency)
 * [x] Configure the Docker image via the DSL (`ffmpegDockerImage`)
 * [x] Force Docker even when FFmpeg is installed locally (`forceDocker`)
+* [x] Prioritised audio stream selection (320k → 256k → 192k → 160k → fallback)
+* [x] Automatic quality upgrade detection and re-download
+* [x] Safe upgrade with `.old` backup — restore on failure
+* [x] Two-pass ID3 tag writing with minimal fallback
 * [ ] Integration tests tagged `@integration` (real downloads, nightly CI)
 * [ ] Download report at end of task (JSON/HTML summary)
