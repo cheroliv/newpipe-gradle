@@ -5,7 +5,7 @@
 :icons: font
 :source-highlighter: highlight.js
 :hardbreaks-option:
-:plugin_version: 0.0.3
+:plugin_version: 0.0.4
 :pipe_commit: 4701a17
 
 ++++
