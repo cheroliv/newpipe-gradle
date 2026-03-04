@@ -29,7 +29,7 @@ music from YouTube and convert it to MP3 — no Python required.
 |===
 | Tool | Role | Required
 
-| JDK 24+
+| JDK 21+
 | Gradle and plugin runtime
 | ✅
 
@@ -227,6 +227,33 @@ The plugin resolves the conversion strategy *once at startup*, in this order:
 Setting `forceDocker = true` skips priority 1 entirely, regardless of whether
 `ffmpeg` is installed.
 
+=== Choosing between local FFmpeg and Docker
+
+By default the plugin prefers local FFmpeg when available, as it is faster
+(no container startup overhead). You can force a specific behaviour depending
+on your environment:
+
+[cols="1,2,2", options="header"]
+|===
+| Scenario | Configuration | Effect
+
+| FFmpeg installed locally, use it directly
+| `forceDocker = false` _(default)_
+| `LOCAL` strategy — FFmpeg from `PATH` is used
+
+| FFmpeg installed, but Docker preferred anyway
+| `forceDocker = true`
+| `DOCKER` strategy — local FFmpeg is ignored
+
+| No local FFmpeg, Docker available
+| `forceDocker = false` _(default)_
+| `DOCKER` strategy — automatic fallback
+
+| CI/CD — guaranteed reproducible build
+| `forceDocker = true` + `ffmpegDockerImage = "jrottenberg/ffmpeg:8-scratch"`
+| Same FFmpeg image regardless of the execution environment
+|===
+
 === Docker conversion details
 
 When the `DOCKER` strategy is selected, the plugin runs:
@@ -237,7 +264,7 @@ docker run --rm \
   --user <current-uid>:<current-gid> \
   -v <artist-dir>:/data \
   <ffmpegDockerImage> \
-  -i /data/<input.m4a> -vn -ar 44100 -ac 2 -b:a 192k -y \
+  -i /data/<input.m4a> -vn -ar 44100 -ac 2 -b:a <bitrate> -y \
   /data/<output.mp3>
 ----
 
@@ -247,6 +274,71 @@ writes the ID3 tags after the conversion.
 
 Both the temp file (`_temp.m4a`) and the output MP3 are placed in the same
 artist directory, so a single volume mount covers both.
+
+== Audio Quality Selection
+
+=== Bitrate ladder
+
+The plugin automatically selects the best available audio stream for each
+video, following a descending priority ladder:
+
+[cols="1,1,2", options="header"]
+|===
+| Priority | Target | Behaviour
+
+| 1
+| 320 kbps
+| Closest stream >= 320 kbps selected first
+
+| 2
+| 256 kbps
+| If no stream >= 320 kbps is available
+
+| 3
+| 192 kbps
+| If no stream >= 256 kbps is available
+
+| 4
+| 160 kbps
+| Last acceptable fallback
+
+| Fallback
+| Best available
+| If no stream reaches 160 kbps — warning logged
+|===
+
+The stream format (m4a, webm, opus…) is deliberately ignored during selection:
+FFmpeg handles the conversion to MP3 regardless of the source format.
+
+The selected bitrate is passed directly to FFmpeg (`-b:a <bitrate>k`),
+ensuring the YouTube stream quality is faithfully preserved in the final MP3.
+
+=== Automatic quality upgrade
+
+If an MP3 was downloaded in a previous session at a lower quality than what
+is currently available on YouTube, the plugin detects this automatically and
+re-downloads it at the best possible quality.
+
+Detection is based on comparing the encoded bitrate of the existing MP3
+(read from its audio header) with the bitrate of the best available YouTube
+stream. A gap greater than 32 kbps triggers a re-download — this threshold
+absorbs normal FFmpeg encoding variance (a 320 kbps stream typically produces
+315–318 kbps encoded).
+
+==== Safety during upgrade
+
+The quality upgrade proceeds in three phases to ensure a file is never lost:
+
+[source,text]
+----
+1. The old MP3 is renamed to <name>.old  (backup)
+2. The new stream is downloaded and converted to MP3
+3. On success  → the .old file is deleted
+   On failure  → the .old file is restored as .mp3
+----
+
+At no point are you left without an audio file for a given track, even if
+the conversion or download fails midway.
 
 == Usage
 
@@ -303,14 +395,18 @@ conversion starts immediately — temporary files do not accumulate.
 === Duplicate detection
 
 Before each download, the plugin checks whether an identical MP3 already
-exists by comparing ID3 tags (title, artist) and audio duration (±2s tolerance).
-If the file matches, it is skipped silently.
+exists by comparing ID3 tags (title, artist), audio duration (±2s tolerance)
+and encoded bitrate. If the file matches in both content and quality, it is
+skipped silently.
 
 === Resume after interruption
 
 If the task is interrupted (Ctrl+C, network failure), temporary files
 (`_temp.m4a`) and incomplete MP3s are automatically deleted on the next run.
 The download restarts cleanly from the beginning.
+
+If a quality upgrade was in progress, the `.old` backup file is automatically
+restored as `.mp3`.
 
 === Missing playlists and videos
 
@@ -350,6 +446,15 @@ characters replaced.
 | `COVER`
 | YouTube video thumbnail
 |===
+
+[NOTE]
+====
+*Two-pass tag writing* +
+If the full tag write fails (corrupt file, permission error, unsupported
+format), the plugin attempts a minimal second pass with only the title and
+artist. If that also fails, the MP3 is kept without tags rather than failing
+the download entirely.
+====
 
 == Troubleshooting
 
@@ -405,6 +510,21 @@ newpipe {
 }
 ----
 
+=== Force local FFmpeg despite Docker being installed
+
+If Docker is installed on your machine but you prefer to use local FFmpeg
+(faster, no container startup):
+
+[source,kotlin]
+----
+newpipe {
+    configPath  = file("musics.yml").absolutePath
+    forceDocker = false  // default — local FFmpeg takes priority
+}
+----
+
+The plugin automatically detects local FFmpeg first whenever `forceDocker = false`.
+
 === Permission denied on MP3 file (Docker strategy)
 
 If you see an error like:
@@ -424,3 +544,10 @@ If the error persists, verify that your Docker daemon version supports the
 ----
 chmod -R u+w downloads/
 ----
+
+=== An existing MP3 is re-downloaded on every run
+
+This indicates that the file's ID3 tags do not match the YouTube metadata
+(different title or artist), or that the detected bitrate is significantly
+below the best available stream. Check the file's tags with a tag editor
+(Ex Falso, MusicBrainz Picard) and compare with the exact YouTube video title.

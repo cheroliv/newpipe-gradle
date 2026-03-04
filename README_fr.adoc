@@ -29,7 +29,7 @@ de la musique depuis YouTube et la convertir en MP3, sans dépendance Python.
 |===
 | Outil | Rôle | Obligatoire
 
-| JDK 24+
+| JDK 21+
 | Runtime Gradle et plugin
 | ✅
 
@@ -229,6 +229,33 @@ dans cet ordre de priorité :
 Mettre `forceDocker = true` ignore entièrement la priorité 1, que `ffmpeg`
 soit installé ou non.
 
+=== Choisir entre FFmpeg local et Docker
+
+Par défaut le plugin préfère FFmpeg local s'il est disponible, car c'est
+plus rapide (pas de démarrage de conteneur). Vous pouvez forcer un
+comportement précis selon votre environnement :
+
+[cols="1,2,2", options="header"]
+|===
+| Scénario | Configuration | Effet
+
+| FFmpeg installé localement, utilisation directe
+| `forceDocker = false` _(défaut)_
+| Stratégie `LOCAL` — FFmpeg du `PATH` est utilisé
+
+| FFmpeg installé, mais on veut Docker quand même
+| `forceDocker = true`
+| Stratégie `DOCKER` — FFmpeg local ignoré
+
+| Pas de FFmpeg local, Docker disponible
+| `forceDocker = false` _(défaut)_
+| Stratégie `DOCKER` — bascule automatique
+
+| CI/CD — build reproductible garanti
+| `forceDocker = true` + `ffmpegDockerImage = "jrottenberg/ffmpeg:8-scratch"`
+| Même image FFmpeg quel que soit l'environnement d'exécution
+|===
+
 === Détails de la conversion Docker
 
 Lorsque la stratégie `DOCKER` est sélectionnée, le plugin exécute :
@@ -239,7 +266,7 @@ docker run --rm \
   --user <uid-courant>:<gid-courant> \
   -v <dossier-artiste>:/data \
   <ffmpegDockerImage> \
-  -i /data/<input.m4a> -vn -ar 44100 -ac 2 -b:a 192k -y \
+  -i /data/<input.m4a> -vn -ar 44100 -ac 2 -b:a <bitrate> -y \
   /data/<output.mp3>
 ----
 
@@ -249,6 +276,73 @@ de permissions lorsque jaudiotagger écrit les tags ID3 après la conversion.
 
 Le fichier temporaire (`_temp.m4a`) et le MP3 de sortie sont tous deux placés
 dans le même dossier artiste, qu'un seul montage de volume couvre entièrement.
+
+== Sélection de la qualité audio
+
+=== Échelle de bitrate
+
+Le plugin sélectionne automatiquement le meilleur flux audio disponible pour
+chaque vidéo, selon une échelle de priorité décroissante :
+
+[cols="1,1,2", options="header"]
+|===
+| Priorité | Cible | Comportement
+
+| 1
+| 320 kbps
+| Flux le plus proche ≥ 320 kbps sélectionné en premier
+
+| 2
+| 256 kbps
+| Si aucun flux ≥ 320 kbps disponible
+
+| 3
+| 192 kbps
+| Si aucun flux ≥ 256 kbps disponible
+
+| 4
+| 160 kbps
+| Dernier recours acceptable
+
+| Fallback
+| Meilleur disponible
+| Si aucun flux n'atteint 160 kbps — avertissement dans les logs
+|===
+
+Le format du flux (m4a, webm, opus…) est délibérément ignoré lors de la
+sélection : FFmpeg gère la conversion vers MP3 quel que soit le format source.
+
+Le bitrate sélectionné est transmis directement à FFmpeg (`-b:a <bitrate>k`),
+ce qui garantit que la qualité du flux YouTube est fidèlement préservée dans
+le MP3 final.
+
+=== Upgrade automatique de qualité
+
+Si un MP3 a été téléchargé lors d'une session précédente dans une qualité
+inférieure à ce qui est disponible aujourd'hui sur YouTube, le plugin le
+détecte automatiquement et le retélécharge à la meilleure qualité possible.
+
+La détection repose sur la comparaison entre le bitrate encodé du MP3
+existant (lu via les tags audio) et le bitrate du meilleur flux YouTube
+disponible. Un écart supérieur à 32 kbps déclenche le retéléchargement —
+ce seuil absorbe la variance normale d'encodage FFmpeg (un flux 320 kbps
+produit typiquement 315–318 kbps encodé).
+
+==== Sécurité lors de l'upgrade
+
+L'upgrade de qualité se déroule en trois phases pour ne jamais perdre
+un fichier en cas d'interruption :
+
+[source,text]
+----
+1. L'ancien MP3 est renommé en <nom>.old  (backup)
+2. Le nouveau flux est téléchargé et converti en MP3
+3. En cas de succès  → le fichier .old est supprimé
+   En cas d'échec   → le fichier .old est restauré en .mp3
+----
+
+À aucun moment vous ne vous retrouvez sans fichier audio pour une piste
+donnée, même si la conversion ou le téléchargement échoue en cours de route.
 
 == Utilisation
 
@@ -306,14 +400,18 @@ s'accumulent pas.
 === Détection des doublons
 
 Avant chaque téléchargement, le plugin vérifie si un MP3 identique existe
-déjà via les tags ID3 (titre, artiste) et la durée audio (tolérance ±2s).
-Si le fichier est identique, il est ignoré silencieusement.
+déjà via les tags ID3 (titre, artiste), la durée audio (tolérance ±2s) et
+le bitrate encodé. Si le fichier est identique en qualité et en contenu,
+il est ignoré silencieusement.
 
 === Reprise après interruption
 
 Si la tâche est interrompue (Ctrl+C, coupure réseau), les fichiers temporaires
 (`_temp.m4a`) et les MP3 incomplets sont supprimés automatiquement au
 prochain lancement. Le téléchargement repart proprement depuis le début.
+
+Si un upgrade de qualité était en cours, le fichier `.old` (backup de
+l'ancienne version) est restauré automatiquement en `.mp3`.
 
 === Playlists et vidéos introuvables
 
@@ -353,6 +451,15 @@ avec seulement les caractères interdits par le système de fichiers remplacés.
 | `COVER`
 | Miniature de la vidéo YouTube
 |===
+
+[NOTE]
+====
+*Écriture des tags en deux passes* +
+Si l'écriture complète des tags échoue (fichier corrompu, droits d'accès,
+format non reconnu), le plugin tente une seconde passe minimale avec
+uniquement le titre et l'artiste. Si cette seconde passe échoue aussi,
+le MP3 est conservé sans tags plutôt que de faire échouer le téléchargement.
+====
 
 == Dépannage
 
@@ -409,6 +516,22 @@ newpipe {
 }
 ----
 
+=== Forcer FFmpeg local malgré Docker installé
+
+Si Docker est installé sur votre machine mais que vous préférez utiliser
+FFmpeg local (plus rapide, pas de démarrage de conteneur) :
+
+[source,kotlin]
+----
+newpipe {
+    configPath  = file("musics.yml").absolutePath
+    forceDocker = false  // défaut — FFmpeg local prioritaire
+}
+----
+
+Le plugin détecte automatiquement FFmpeg local en premier dès que
+`forceDocker = false`.
+
 === Permission refusée sur le fichier MP3 (stratégie Docker)
 
 Si vous obtenez une erreur de ce type :
@@ -429,3 +552,11 @@ les droits en écriture sur le dossier `downloads/` :
 ----
 chmod -R u+w downloads/
 ----
+
+=== Un MP3 existant est retéléchargé à chaque exécution
+
+Cela indique que les tags ID3 du fichier ne correspondent pas aux métadonnées
+YouTube (titre ou artiste différent) ou que le bitrate détecté est
+significativement inférieur au meilleur flux disponible. Vérifiez les tags
+du fichier avec un éditeur de tags (Ex Falso, MusicBrainz Picard) et
+comparez avec le titre exact de la vidéo YouTube.
