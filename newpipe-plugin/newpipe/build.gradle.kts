@@ -1,3 +1,5 @@
+import org.gradle.api.JavaVersion.VERSION_21
+import org.gradle.api.file.DuplicatesStrategy.EXCLUDE
 import org.gradle.api.tasks.testing.logging.TestExceptionFormat.FULL
 
 plugins {
@@ -12,7 +14,7 @@ plugins {
 group = "com.cheroliv"
 version = libs.plugins.newpipe.get().version
 
-kotlin.jvmToolchain(JavaVersion.VERSION_24.ordinal)
+kotlin.jvmToolchain(VERSION_21.ordinal)
 
 repositories {
     mavenCentral()
@@ -22,21 +24,16 @@ repositories {
 
 dependencies {
     implementation(kotlin("stdlib-jdk8"))
-
     api(libs.bundles.newpipe)
-
     // Coroutines - IMPORTANT pour les tests asynchrones
     implementation(libs.bundles.coroutines)
-
     testImplementation(kotlin("test-junit5"))
-    testRuntimeOnly("org.junit.platform:junit-platform-launcher")
-    testImplementation("org.slf4j:slf4j-api:2.0.17")
-    testRuntimeOnly("ch.qos.logback:logback-classic:1.5.26")
-
+    testRuntimeOnly(libs.junit.platform.launcher)
+    testImplementation(libs.slf4j)
+    testRuntimeOnly(libs.logback)
     testImplementation(libs.assertj.core)
     testImplementation(libs.mockito.kotlin)
     testImplementation(libs.mockito.junit.jupiter)
-
     // Cucumber dependencies
     testImplementation(libs.bundles.cucumber)
 }
@@ -62,12 +59,8 @@ tasks.named<Test>("test") {
 
 // 1. Créer le SourceSet functionalTest
 val functionalTest: SourceSet by sourceSets.creating {
-    java {
-        srcDirs("src/functionalTest/kotlin")
-    }
-    resources {
-        srcDirs("src/functionalTest/resources")
-    }
+    java.srcDirs("src/functionalTest/kotlin")
+    resources.srcDirs("src/functionalTest/resources")
 }
 
 // 2. Ajouter GradleTestKit à functionalTest (SANS hériter de testImplementation)
@@ -77,9 +70,9 @@ dependencies {
     add(functionalTest.implementationConfigurationName, kotlin("test-junit5"))
 
     // Ajouter les dépendances nécessaires explicitement
-    add(functionalTest.implementationConfigurationName, "org.slf4j:slf4j-api:2.0.17")
-    add(functionalTest.runtimeOnlyConfigurationName, "ch.qos.logback:logback-classic:1.5.26")
-    add(functionalTest.runtimeOnlyConfigurationName, "org.junit.platform:junit-platform-launcher")
+    add(functionalTest.implementationConfigurationName, libs.slf4j)
+    add(functionalTest.runtimeOnlyConfigurationName, libs.logback)
+    add(functionalTest.runtimeOnlyConfigurationName, libs.junit.platform.launcher)
 
     // CORRECTION: Ajouter AssertJ pour les assertions
     add(functionalTest.implementationConfigurationName, libs.assertj.core)
@@ -110,16 +103,14 @@ val functionalTestTask = tasks.register<Test>("functionalTest") {
 
 // CORRECTION: Gérer les duplications de ressources pour functionalTest
 tasks.named<ProcessResources>(functionalTest.processResourcesTaskName) {
-    duplicatesStrategy = DuplicatesStrategy.EXCLUDE
+    duplicatesStrategy = EXCLUDE
 }
 
 // 4. Configurer les sources sets pour Cucumber (test standard)
 sourceSets {
     test {
-        resources { srcDir("src/test/features") }
-        java {// Steps dans scenarios/
-            srcDir("src/test/scenarios")
-        }
+        java.srcDir("src/test/scenarios")
+        resources.srcDir("src/test/features")
     }
 }
 
@@ -133,9 +124,8 @@ configurations.named("testRuntimeOnly").configure {
 }
 
 // 6. Ajouter les classes compilées de functionalTest au classpath de test
-dependencies {
-    testImplementation(functionalTest.output)
-}
+dependencies.testImplementation(functionalTest.output)
+
 
 configurations {
     // Exclure logback-classic du classpath de test
@@ -155,30 +145,23 @@ configurations {
 val cucumberTest = tasks.register<Test>("cucumberTest") {
     description = "Runs Cucumber BDD tests"
     group = "verification"
-
     testClassesDirs = sourceSets.test.get().output.classesDirs
-
     classpath = configurations.testRuntimeClasspath.get() +
             sourceSets.test.get().output +
             functionalTest.output +
             sourceSets.main.get().output
-
     useJUnitPlatform {
         // CORRECTION: Ne pas filtrer par tag ici, ça filtre les engines JUnit
         // Le filtrage des scénarios Cucumber se fait dans le runner via FILTER_TAGS_PROPERTY_NAME
         excludeEngines("junit-jupiter")
     }
-
     systemProperty("cucumber.junit-platform.naming-strategy", "long")
-
     testLogging {
         events("passed", "skipped", "failed")
         showStandardStreams = true
         exceptionFormat = FULL
     }
-
     outputs.upToDateWhen { false }
-
     // S'assurer que functionalTest et main sont compilés avant
     dependsOn(functionalTest.classesTaskName)
     dependsOn(tasks.classes)
@@ -252,11 +235,10 @@ publishing {
     repositories {
         maven {
             name = "sonatype"
-            url = if (version.toString().endsWith("-SNAPSHOT")) {
+            url = (if (version.toString().endsWith("-SNAPSHOT"))
                 uri("https://s01.oss.sonatype.org/content/repositories/snapshots/")
-            } else {
-                uri("https://s01.oss.sonatype.org/service/local/staging/deploy/maven2/")
-            }
+            else
+                uri("https://s01.oss.sonatype.org/service/local/staging/deploy/maven2/"))
             credentials {
                 username = project.findProperty("ossrhUsername") as? String
                 password = project.findProperty("ossrhPassword") as? String
@@ -268,9 +250,7 @@ publishing {
 
 signing {
     val isReleaseVersion = !version.toString().endsWith("-SNAPSHOT")
-    if (isReleaseVersion) {
-        sign(publishing.publications)
-    }
+    if (isReleaseVersion) sign(publishing.publications)
     useGpgCmd()
 }
 
