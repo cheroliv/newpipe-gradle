@@ -20,6 +20,10 @@ artistes:
     playlists:
       - "https://www.youtube.com/watch?v=9z7pQTCvN7E&list=RDEMQLxdxbt5ssWGX4-gJ_3mIw&start_radio=1"
 
+  - name: "Aflak"
+    playlists:
+      - "https://www.youtube.com/watch?v=HBh4P_Ytr9o&list=RDEMeW6M8Rud8KIs5jsKr9Fd1w&start_radio=1"
+
   - name: "TAKTOUKA REMIX"
     tunes:
       - "https://www.youtube.com/watch?v=T1EpmaF0jhc"
@@ -81,8 +85,10 @@ artistes:
       - "https://www.youtube.com/watch?v=Gk0j9B6zqtY"
     playlists:
       - "https://www.youtube.com/watch?v=UQpgU6SUXJU&list=RDEMhZ6Oy2MMZavrtslLaitfhQ&start_radio=1"
-
+  #https://www.youtube.com/watch?v=-zR1VLkncj8&list=RDEMC6MzRayF0CW4QaDp8AZBOw&start_radio=1
   - name: "Ayman Serhani"
+    playlists:
+      - "https://www.youtube.com/watch?v=F9DCeDWojUc&list=RDEMETw2jbb2jgPswjYTI8gfrA&start_radio=1"
     tunes:
       - "https://www.youtube.com/watch?v=7K_SpSf4Mhk"
       - "https://www.youtube.com/watch?v=FgAbqk-dL8s"
@@ -182,6 +188,8 @@ artistes:
   - name: "Hind Ziadi"
     tunes:
       - "https://www.youtube.com/watch?v=L9_TPWqU8Jc"
+    playlists:
+      - "https://www.youtube.com/watch?v=Plo7ApbcncE&list=RDEMSHcbntza38bS-Qm0ewao9w&start_radio=1"
 
   - name: "Jaylann"
     tunes:
@@ -204,9 +212,12 @@ artistes:
       - "https://www.youtube.com/watch?v=iuid_jkoowY"
     playlists:
       - "https://www.youtube.com/watch?v=5V0K5TWJ0YY&list=RDEM1fNix6mkVZI7AVyhoQzkCg&start_radio=1"
+
   - name: "Zina Daoudia"
     tunes:
       - "https://www.youtube.com/watch?v=yA2LAqFAqV4"
+    playlists:
+      - "https://www.youtube.com/watch?v=uoqYLEnq-ZE&list=RDEMnqjYcRzgdT4uBRYZc1ccqQ&start_radio=1"
 
   - name: "Cheba Souad"
     tunes:
@@ -222,12 +233,17 @@ artistes:
     playlists:
       - "https://www.youtube.com/watch?v=SOV6F_AXzRI&list=RDEMkdRT82xA368-J0oQtZ063A&start_radio=1"
 
+  - name: "Douzi"
+    playlists:
+      - "https://www.youtube.com/watch?v=hJH8bj-Z8Qo&list=RDEMNawv0bFjHT8myKNgaR25Qg&start_radio=1"
+
   - name: "Cheb Midou"
     playlists:
       - "https://www.youtube.com/watch?v=mwnfRWSYsYE&list=RDEM4YsxhqL7kKOrQre2s5nGzg&start_radio=1"
 
   - name: "Silya Ziani"
     playlists:
+      - "https://www.youtube.com/watch?v=j2OUsf1uAVE&list=RDj2OUsf1uAVE&start_radio=1"
       - "https://www.youtube.com/watch?v=-zR1VLkncj8&list=RDEMC6MzRayF0CW4QaDp8AZBOw&start_radio=1"
 
   - name: "Rachid Kasmi"
