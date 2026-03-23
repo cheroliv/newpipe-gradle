@@ -1,0 +1,553 @@
+= newpipe-gradle
+:toc: left
+:toc-title: Contents
+:toclevels: 3
+:icons: font
+:source-highlighter: highlight.js
+:hardbreaks-option:
+:plugin_version: 0.0.4
+:pipe_commit: 4701a17
+
+++++
+<p align="right">
+  <a href="README_plantuml_fr.adoc">
+    <img src="newpipe-plugin/images/lang-fr-red.svg" alt="Français" width="64"/>
+  </a>
+</p>
+++++
+
+image:https://img.shields.io/badge/Kotlin-2.x-7F52FF?logo=kotlin[Kotlin]
+image:https://img.shields.io/badge/Gradle-8.x-02303A?logo=gradle[Gradle]
+image:https://img.shields.io/badge/License-Apache%202.0-blue.svg[License]
+
+A Gradle project that uses the `com.cheroliv.newpipe` plugin to download
+music from YouTube and convert it to MP3 — no Python required.
+
+== Prerequisites
+
+[cols="1,2,1", options="header"]
+|===
+| Tool | Role | Required
+
+| JDK 21+
+| Gradle and plugin runtime
+| ✅
+
+| FFmpeg _or_ Docker
+| Audio to MP3 conversion
+| ✅ (one or the other)
+|===
+
+[NOTE]
+====
+No Python dependency is required.
+`yt-dlp` is not used — YouTube extraction is handled by
+https://github.com/TeamNewPipe/NewPipeExtractor[NewPipe Extractor], pure JVM.
+====
+
+== Project Structure
+
+[source,text]
+----
+newpipe-gradle/               <-- this repo (consumer project)
+├── build.gradle.kts          <-- applies the plugin, nothing else
+├── settings.gradle.kts       <-- declares JitPack in pluginManagement
+├── musics.yml                <-- your music selection
+├── gradle/
+│   └── libs.versions.toml   <-- version catalog
+└── newpipe-plugin/           <-- plugin source code (sub-project)
+----
+
+== Configuration
+
+=== settings.gradle.kts
+
+JitPack must be declared in `pluginManagement` because the plugin depends on
+NewPipe Extractor, which is hosted on JitPack.
+
+[source,kotlin]
+----
+pluginManagement {
+    repositories {
+        mavenLocal()
+        gradlePluginPortal()
+        mavenCentral()
+        maven { url = uri("https://jitpack.io") }
+    }
+}
+
+dependencyResolutionManagement {
+    repositories {
+        mavenLocal()
+        mavenCentral()
+        maven { url = uri("https://jitpack.io") }
+    }
+}
+
+plugins {
+    id("org.gradle.toolchains.foojay-resolver-convention") version "1.0.0"
+}
+
+rootProject.name = "newpipe-plugin"
+include("newpipe")
+----
+
+=== build.gradle.kts
+
+Minimal configuration — only `configPath` is required:
+
+[source,kotlin,subs="attributes+"]
+----
+plugins {
+    id("com.cheroliv.newpipe") version ("{plugin_version}")
+}
+
+newpipe {
+    configPath = file("musics.yml").absolutePath
+}
+----
+
+Full configuration with all available options:
+
+[source,kotlin,subs="attributes+"]
+----
+plugins {
+    id("com.cheroliv.newpipe") version ("{plugin_version}")
+}
+
+newpipe {
+    // Required — path to the YAML selection file
+    configPath = file("musics.yml").absolutePath
+
+    // Optional — Docker image used for FFmpeg conversion.
+    // Default: "jrottenberg/ffmpeg:4.4-alpine"
+    // Only used when FFmpeg is not installed locally, OR when forceDocker = true.
+    ffmpegDockerImage = "jrottenberg/ffmpeg:8-scratch"
+
+    // Optional — force Docker even if FFmpeg is installed locally.
+    // Useful for reproducible builds or CI environments. Default: false
+    forceDocker = true
+}
+----
+
+==== DSL reference
+
+[cols="1,2,1,2", options="header"]
+|===
+| Property | Type | Default | Description
+
+| `configPath`
+| `String`
+| —
+| *Required.* Absolute path to the `musics.yml` selection file.
+
+| `ffmpegDockerImage`
+| `String`
+| `jrottenberg/ffmpeg:4.4-alpine`
+| Docker image used for conversion when FFmpeg is not installed locally,
+or when `forceDocker = true`.
+
+| `forceDocker`
+| `Boolean`
+| `false`
+| When `true`, skips the local FFmpeg probe and always uses Docker,
+even if `ffmpeg` is available on the system `PATH`.
+|===
+
+=== musics.yml
+
+The configuration file declares artists, their individual tracks and their
+YouTube playlists.
+
+[source,yaml]
+----
+artistes:
+  - name: "Daft Punk"
+    tunes:
+      - "https://www.youtube.com/watch?v=5NV6Rdv1a3I"
+      - "https://www.youtube.com/watch?v=gAjR4_CbPpQ"
+    playlists:
+      - "https://www.youtube.com/playlist?list=PLx0sYbCqOb8TBPRdmBHs5Iftvv9TPboYG"
+
+  - name: "Massive Attack"
+    tunes:
+      - "https://www.youtube.com/watch?v=u7K72X4eo_s"
+    playlists:
+      - "https://www.youtube.com/watch?v=5dWeeUIZFgA&list=RDEMtbC_BXEtvKp9p_L81bzVwA&start_radio=1"
+----
+
+==== YAML Structure
+
+[cols="1,3", options="header"]
+|===
+| Field | Description
+
+| `artistes`
+| List of artists to download
+
+| `artistes[].name`
+| Artist name — used as the folder name under `downloads/`
+
+| `artistes[].tunes`
+| Individual YouTube URLs. The artist name comes from the `name` field.
+
+| `artistes[].playlists`
+| YouTube playlist URLs (standard or Mix Radio `list=RD...`).
+The artist name comes from the YouTube video uploader tag.
+|===
+
+[NOTE]
+====
+*YouTube Mix Radio* (`list=RD...`, `list=RDEM...`, `list=RDAMVM...`) +
+These playlists are dynamically generated. The plugin automatically fetches
+the first page (~15 tracks) and stops — no infinite loop.
+====
+
+== FFmpeg Strategy
+
+The plugin resolves the conversion strategy *once at startup*, in this order:
+
+[cols="1,1,3", options="header"]
+|===
+| Priority | Strategy | Condition
+
+| 1
+| `LOCAL`
+| `ffmpeg -version` exits 0 *and* `forceDocker = false`
+
+| 2
+| `DOCKER`
+| `docker info` exits 0 (daemon running)
+
+| 3
+| `NONE`
+| Neither available → explicit error at conversion time
+|===
+
+Setting `forceDocker = true` skips priority 1 entirely, regardless of whether
+`ffmpeg` is installed.
+
+=== Choosing between local FFmpeg and Docker
+
+By default the plugin prefers local FFmpeg when available, as it is faster
+(no container startup overhead). You can force a specific behaviour depending
+on your environment:
+
+[cols="1,2,2", options="header"]
+|===
+| Scenario | Configuration | Effect
+
+| FFmpeg installed locally, use it directly
+| `forceDocker = false` _(default)_
+| `LOCAL` strategy — FFmpeg from `PATH` is used
+
+| FFmpeg installed, but Docker preferred anyway
+| `forceDocker = true`
+| `DOCKER` strategy — local FFmpeg is ignored
+
+| No local FFmpeg, Docker available
+| `forceDocker = false` _(default)_
+| `DOCKER` strategy — automatic fallback
+
+| CI/CD — guaranteed reproducible build
+| `forceDocker = true` + `ffmpegDockerImage = "jrottenberg/ffmpeg:8-scratch"`
+| Same FFmpeg image regardless of the execution environment
+|===
+
+=== Docker conversion details
+
+When the `DOCKER` strategy is selected, the plugin runs:
+
+[source,bash]
+----
+docker run --rm \
+  --user <current-uid>:<current-gid> \
+  -v <artist-dir>:/data \
+  <ffmpegDockerImage> \
+  -i /data/<input.m4a> -vn -ar 44100 -ac 2 -b:a <bitrate> -y \
+  /data/<output.mp3>
+----
+
+The `--user` flag ensures the output MP3 is owned by the user running Gradle,
+not by the container's root user. This avoids permission errors when jaudiotagger
+writes the ID3 tags after the conversion.
+
+Both the temp file (`_temp.m4a`) and the output MP3 are placed in the same
+artist directory, so a single volume mount covers both.
+
+== Audio Quality Selection
+
+=== Bitrate ladder
+
+The plugin automatically selects the best available audio stream for each
+video, following a descending priority ladder:
+
+[cols="1,1,2", options="header"]
+|===
+| Priority | Target | Behaviour
+
+| 1
+| 320 kbps
+| Closest stream >= 320 kbps selected first
+
+| 2
+| 256 kbps
+| If no stream >= 320 kbps is available
+
+| 3
+| 192 kbps
+| If no stream >= 256 kbps is available
+
+| 4
+| 160 kbps
+| Last acceptable fallback
+
+| Fallback
+| Best available
+| If no stream reaches 160 kbps — warning logged
+|===
+
+The stream format (m4a, webm, opus…) is deliberately ignored during selection:
+FFmpeg handles the conversion to MP3 regardless of the source format.
+
+The selected bitrate is passed directly to FFmpeg (`-b:a <bitrate>k`),
+ensuring the YouTube stream quality is faithfully preserved in the final MP3.
+
+=== Automatic quality upgrade
+
+If an MP3 was downloaded in a previous session at a lower quality than what
+is currently available on YouTube, the plugin detects this automatically and
+re-downloads it at the best possible quality.
+
+Detection is based on comparing the encoded bitrate of the existing MP3
+(read from its audio header) with the bitrate of the best available YouTube
+stream. A gap greater than 32 kbps triggers a re-download — this threshold
+absorbs normal FFmpeg encoding variance (a 320 kbps stream typically produces
+315–318 kbps encoded).
+
+==== Safety during upgrade
+
+The quality upgrade proceeds in three phases to ensure a file is never lost:
+
+[source,text]
+----
+1. The old MP3 is renamed to <name>.old  (backup)
+2. The new stream is downloaded and converted to MP3
+3. On success  → the .old file is deleted
+   On failure  → the .old file is restored as .mp3
+----
+
+At no point are you left without an audio file for a given track, even if
+the conversion or download fails midway.
+
+== Usage
+
+=== Download the full selection
+
+[source,bash]
+----
+./gradlew -i download
+----
+
+MP3s are organised as follows:
+
+[source,text]
+----
+downloads/
+├── Daft Punk/
+│   ├── Daft Punk - Get Lucky.mp3
+│   └── Daft Punk - Around the World.mp3
+└── Massive Attack/
+    └── Massive Attack - Teardrop.mp3
+----
+
+=== Download a single video (CLI)
+
+[source,bash]
+----
+./gradlew download --url=https://www.youtube.com/watch?v=5NV6Rdv1a3I
+----
+
+With a custom output folder:
+
+[source,bash]
+----
+./gradlew download \
+  --url=https://www.youtube.com/watch?v=5NV6Rdv1a3I \
+  --output=/home/user/Music
+----
+
+=== List available tasks
+
+[source,bash]
+----
+./gradlew tasks --group=newpipe
+----
+
+== Behaviour
+
+=== Concurrent downloads
+
+The plugin downloads up to 3 videos simultaneously to maximise throughput
+while avoiding YouTube throttling. As soon as a download completes, the MP3
+conversion starts immediately — temporary files do not accumulate.
+
+=== Duplicate detection
+
+Before each download, the plugin checks whether an identical MP3 already
+exists by comparing ID3 tags (title, artist), audio duration (±2s tolerance)
+and encoded bitrate. If the file matches in both content and quality, it is
+skipped silently.
+
+=== Resume after interruption
+
+If the task is interrupted (Ctrl+C, network failure), temporary files
+(`_temp.m4a`) and incomplete MP3s are automatically deleted on the next run.
+The download restarts cleanly from the beginning.
+
+If a quality upgrade was in progress, the `.old` backup file is automatically
+restored as `.mp3`.
+
+=== Missing playlists and videos
+
+If a playlist or video no longer exists (deleted, private, invalid URL),
+it is skipped with a warning in the logs. The rest of the selection continues
+to be downloaded.
+
+=== File naming
+
+[source,text]
+----
+downloads/<Artist>/<Artist> - <Title>.mp3
+----
+
+If the YouTube title contains only special characters that cannot be used in
+a file name, the raw YouTube title is kept with only filesystem-forbidden
+characters replaced.
+
+== ID3 Tags Written
+
+[cols="1,2", options="header"]
+|===
+| Tag | Value
+
+| `TITLE`
+| YouTube video title
+
+| `ARTIST`
+| Artist name (YAML for tunes, YouTube uploader for playlists)
+
+| `ALBUM`
+| `YouTube`
+
+| `YEAR`
+| Current year
+
+| `COVER`
+| YouTube video thumbnail
+|===
+
+[NOTE]
+====
+*Two-pass tag writing* +
+If the full tag write fails (corrupt file, permission error, unsupported
+format), the plugin attempts a minimal second pass with only the title and
+artist. If that also fails, the MP3 is kept without tags rather than failing
+the download entirely.
+====
+
+== Troubleshooting
+
+=== The `download` task fails with "configPath not found"
+
+Check that `musics.yml` exists at the project root and that the path in
+`build.gradle.kts` is correct:
+
+[source,kotlin]
+----
+newpipe {
+    configPath = file("musics.yml").absolutePath  // absolute path required
+}
+----
+
+=== Downloads are very slow
+
+YouTube throttles unofficial clients. This behaviour is tied to the version
+of NewPipe Extractor in use. To point to the latest `dev` branch commit:
+
+[source,toml,subs="attributes+"]
+----
+# gradle/libs.versions.toml
+[versions]
+newpipe-extractor = "{pipe_commit}"  # hash of the latest dev commit
+# https://github.com/TeamNewPipe/NewPipeExtractor/commits/dev
+----
+
+=== FFmpeg not found
+
+Install FFmpeg locally:
+
+[source,bash]
+----
+# Debian / Ubuntu
+sudo apt install ffmpeg
+
+# macOS
+brew install ffmpeg
+
+# Arch Linux
+sudo pacman -S ffmpeg
+----
+
+Or configure the plugin to use Docker instead (no local FFmpeg required):
+
+[source,kotlin]
+----
+newpipe {
+    configPath        = file("musics.yml").absolutePath
+    ffmpegDockerImage = "jrottenberg/ffmpeg:4.4-alpine"
+    forceDocker       = true
+}
+----
+
+=== Force local FFmpeg despite Docker being installed
+
+If Docker is installed on your machine but you prefer to use local FFmpeg
+(faster, no container startup):
+
+[source,kotlin]
+----
+newpipe {
+    configPath  = file("musics.yml").absolutePath
+    forceDocker = false  // default — local FFmpeg takes priority
+}
+----
+
+The plugin automatically detects local FFmpeg first whenever `forceDocker = false`.
+
+=== Permission denied on MP3 file (Docker strategy)
+
+If you see an error like:
+
+[source,text]
+----
+Cannot modify /path/to/downloads/Artist/Artist - Title.mp3
+because do not have permissions to modify file
+----
+
+This means the Docker container wrote the MP3 as `root`. The plugin passes
+`--user $(id -u):$(id -g)` to `docker run` automatically to prevent this.
+If the error persists, verify that your Docker daemon version supports the
+`--user` flag and that your user has write access to the `downloads/` directory:
+
+[source,bash]
+----
+chmod -R u+w downloads/
+----
+
+=== An existing MP3 is re-downloaded on every run
+
+This indicates that the file's ID3 tags do not match the YouTube metadata
+(different title or artist), or that the detected bitrate is significantly
+below the best available stream. Check the file's tags with a tag editor
+(Ex Falso, MusicBrainz Picard) and compare with the exact YouTube video title.
