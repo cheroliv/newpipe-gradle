@@ -1,260 +1,92 @@
-import org.gradle.api.JavaVersion.VERSION_21
-import org.gradle.api.file.DuplicatesStrategy.EXCLUDE
-import org.gradle.api.tasks.testing.logging.TestExceptionFormat.FULL
-
 plugins {
-    `java-library`
-    signing
-    `maven-publish`
+    `kotlin-dsl`
     `java-gradle-plugin`
-    alias(libs.plugins.kotlin.jvm)
-    alias(libs.plugins.publish)
+    id("maven-publish")
+    id("signing")
 }
 
-group = "com.cheroliv"
-version = libs.plugins.newpipe.get().version
+group = "com.cheroliv.newpipe"
+version = "0.1.0-SNAPSHOT"
 
-kotlin.jvmToolchain(VERSION_21.ordinal)
-
-repositories {
-    mavenCentral()
-    gradlePluginPortal()
-    maven { url = uri("https://jitpack.io") }
-}
-
-dependencies {
-    implementation(kotlin("stdlib-jdk8"))
-    api(libs.bundles.newpipe)
-    // Coroutines - IMPORTANT pour les tests asynchrones
-    implementation(libs.bundles.coroutines)
-    testImplementation(kotlin("test-junit5"))
-    testRuntimeOnly(libs.junit.platform.launcher)
-    testImplementation(libs.slf4j)
-    testRuntimeOnly(libs.logback)
-    testImplementation(libs.assertj.core)
-    testImplementation(libs.mockito.kotlin)
-    testImplementation(libs.mockito.junit.jupiter)
-    // Cucumber dependencies
-    testImplementation(libs.bundles.cucumber)
-}
-
-
-tasks.withType<Test> {
-    useJUnitPlatform()
-    testLogging {
-        events("passed", "skipped", "failed")
-        showStandardStreams = true
-    }
-}
-
-tasks.named<Test>("test") {
-    filter {
-        // Exclure les classes dans le package 'com.cheroliv.newpipe.scenarios' (tests Cucumber)
-        excludeTestsMatching("com.cheroliv.newpipe.scenarios.**")
-        // Exclure également les classes de functionalTest
-        excludeTestsMatching("com.cheroliv.newpipe.DownloaderPluginFunctionalTests")
-    }
-}
-
-
-// 1. Créer le SourceSet functionalTest
-val functionalTest: SourceSet by sourceSets.creating {
-    java.srcDirs("src/functionalTest/kotlin")
-    resources.srcDirs("src/functionalTest/resources")
-}
-
-// 2. Ajouter GradleTestKit à functionalTest (SANS hériter de testImplementation)
-dependencies {
-    add(functionalTest.implementationConfigurationName, gradleTestKit())
-    add(functionalTest.implementationConfigurationName, kotlin("stdlib-jdk8"))
-    add(functionalTest.implementationConfigurationName, kotlin("test-junit5"))
-
-    // Ajouter les dépendances nécessaires explicitement
-    add(functionalTest.implementationConfigurationName, libs.slf4j)
-    add(functionalTest.runtimeOnlyConfigurationName, libs.logback)
-    add(functionalTest.runtimeOnlyConfigurationName, libs.junit.platform.launcher)
-
-    // CORRECTION: Ajouter AssertJ pour les assertions
-    add(functionalTest.implementationConfigurationName, libs.assertj.core)
-
-    // Ajouter Mockito si nécessaire
-    add(functionalTest.implementationConfigurationName, libs.mockito.kotlin)
-    add(functionalTest.implementationConfigurationName, libs.mockito.junit.jupiter)
-
-    libs.bundles.coroutines.get().forEach { dep ->
-        add(functionalTest.implementationConfigurationName, dep)
-    }
-}
-
-// 3. Tâche pour les tests fonctionnels
-val functionalTestTask = tasks.register<Test>("functionalTest") {
-    description = "Runs functional tests."
-    group = "verification"
-    testClassesDirs = functionalTest.output.classesDirs
-    classpath = configurations[functionalTest.runtimeClasspathConfigurationName] + functionalTest.output
-
-    useJUnitPlatform()
-
-    testLogging {
-        events("passed", "skipped", "failed")
-        showStandardStreams = true
-    }
-}
-
-// CORRECTION: Gérer les duplications de ressources pour functionalTest
-tasks.named<ProcessResources>(functionalTest.processResourcesTaskName) {
-    duplicatesStrategy = EXCLUDE
-}
-
-// 4. Configurer les sources sets pour Cucumber (test standard)
-sourceSets {
-    test {
-        java.srcDir("src/test/scenarios")
-        resources.srcDir("src/test/features")
-    }
-}
-
-// 5. Faire hériter testImplementation de functionalTest (pas l'inverse !)
-configurations.named("testImplementation").configure {
-    extendsFrom(configurations.named(functionalTest.implementationConfigurationName).get())
-}
-
-configurations.named("testRuntimeOnly").configure {
-    extendsFrom(configurations.named(functionalTest.runtimeOnlyConfigurationName).get())
-}
-
-// 6. Ajouter les classes compilées de functionalTest au classpath de test
-dependencies.testImplementation(functionalTest.output)
-
-
-configurations {
-    // Exclure logback-classic du classpath de test
-    named("testRuntimeClasspath") {
-        exclude(group = "ch.qos.logback", module = "logback-classic")
-    }
-    named("testImplementation") {
-        exclude(group = "ch.qos.logback", module = "logback-classic")
-    }
-    // Exclure logback-classic du classpath de functionalTest
-    named(functionalTest.runtimeClasspathConfigurationName) {
-        exclude(group = "ch.qos.logback", module = "logback-classic")
-    }
-}
-
-// 7. Tâche dédiée aux tests Cucumber
-val cucumberTest = tasks.register<Test>("cucumberTest") {
-    description = "Runs Cucumber BDD tests"
-    group = "verification"
-    testClassesDirs = sourceSets.test.get().output.classesDirs
-    classpath = configurations.testRuntimeClasspath.get() +
-            sourceSets.test.get().output +
-            functionalTest.output +
-            sourceSets.main.get().output
-    useJUnitPlatform {
-        // CORRECTION: Ne pas filtrer par tag ici, ça filtre les engines JUnit
-        // Le filtrage des scénarios Cucumber se fait dans le runner via FILTER_TAGS_PROPERTY_NAME
-        excludeEngines("junit-jupiter")
-    }
-    systemProperty("cucumber.junit-platform.naming-strategy", "long")
-    testLogging {
-        events("passed", "skipped", "failed")
-        showStandardStreams = true
-        exceptionFormat = FULL
-    }
-    outputs.upToDateWhen { false }
-    // S'assurer que functionalTest et main sont compilés avant
-    dependsOn(functionalTest.classesTaskName)
-    dependsOn(tasks.classes)
-}
-
-tasks.withType<Test>().configureEach {
-    // Permet de masquer l'avertissement relatif au chargement dynamique d'agents
-    jvmArgs("-XX:+EnableDynamicAgentLoading")
-    failOnNoDiscoveredTests.set(false)
-}
-
-tasks.check {
-    dependsOn(cucumberTest)
-    setDependsOn(dependsOn.filterNot {
-        (it is TaskProvider<*> && it.name == "test") || (it is Task && it.name == "test")
-    })
-}
-
-
-gradlePlugin {
-    plugins {
-        create("newpipe") {
-            id = libs.plugins.newpipe.get().pluginId
-            implementationClass = "${libs.plugins.newpipe.get().pluginId}.DownloaderPlugin"
-            displayName = "NewPipe Downloader Plugin"
-            description = "Gradle plugin for downloading with newpipe and converting to MP3."
-            tags.set(listOf("newpipe", "downloader", "m4a", "ffmpeg", "docker", "mp3", "kotlin-dsl"))
-        }
-    }
-    website = "https://cheroliv.com"
-    vcsUrl = "https://github.com/cheroliv/newpipe-gradle.git"
-    testSourceSets(functionalTest)
-}
-
-publishing {
-    publications {
-        withType<MavenPublication> {
-            if (name == "pluginMaven") {
-                pom {
-                    name.set(gradlePlugin.plugins.getByName("newpipe").displayName)
-                    description.set(gradlePlugin.plugins.getByName("newpipe").description)
-                    url.set(gradlePlugin.website.get())
-                    licenses {
-                        license {
-                            name.set("The Apache License, Version 2.0")
-                            url.set("http://www.apache.org/licenses/LICENSE-2.0.txt")
-                        }
-                    }
-                    developers {
-                        developer {
-                            id.set("cheroliv")
-                            name.set("cheroliv")
-                            email.set("cheroliv.developer@gmail.com")
-                        }
-                    }
-                    scm {
-                        connection.set(gradlePlugin.vcsUrl.get())
-                        developerConnection.set(gradlePlugin.vcsUrl.get())
-                        url.set(gradlePlugin.vcsUrl.get())
-                    }
-                    repositories {
-                        maven {
-                            name = "Jitpack"
-                            url = uri("https://jitpack.io")
-                        }
-                    }
-                }
-            }
-        }
-    }
-    repositories {
-        maven {
-            name = "sonatype"
-            url = (if (version.toString().endsWith("-SNAPSHOT"))
-                uri("https://s01.oss.sonatype.org/content/repositories/snapshots/")
-            else
-                uri("https://s01.oss.sonatype.org/service/local/staging/deploy/maven2/"))
-            credentials {
-                username = project.findProperty("ossrhUsername") as? String
-                password = project.findProperty("ossrhPassword") as? String
-            }
-        }
-        mavenCentral()
-    }
-}
-
-signing {
-    val isReleaseVersion = !version.toString().endsWith("-SNAPSHOT")
-    if (isReleaseVersion) sign(publishing.publications)
-    useGpgCmd()
-}
+// Utilisation de la toolchain comme dans ton modèle
+kotlin.jvmToolchain(11)
 
 java {
     withJavadocJar()
     withSourcesJar()
+}
+
+repositories {
+    mavenCentral()
+    maven { url = uri("https://jitpack.io") }
+    gradlePluginPortal()
+}
+
+// Définition du SourceSet FunctionalTest
+val functionalTest by sourceSets.creating {
+    kotlin.srcDir("src/functionalTest/kotlin")
+    resources.srcDir("src/functionalTest/resources")
+    compileClasspath += sourceSets.main.get().output
+    runtimeClasspath += sourceSets.main.get().output
+}
+
+// Configuration pour l'héritage des dépendances
+configurations {
+    val functionalTestImplementation by getting {
+        extendsFrom(configurations.implementation.get())
+        extendsFrom(configurations.testImplementation.get())
+    }
+}
+
+dependencies {
+    // Core (inspiré de ton modèle)
+    implementation(kotlin("stdlib-jdk8"))
+    implementation(gradleApi())
+
+    // Dépendances spécifiques NewPipe
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.7.3")
+    val jacksonVersion = "2.15.2"
+    implementation("com.fasterxml.jackson.module:jackson-module-kotlin:$jacksonVersion")
+    implementation("com.fasterxml.jackson.dataformat:jackson-dataformat-yaml:$jacksonVersion")
+    implementation("com.squareup.okhttp3:okhttp:4.11.0")
+    implementation("com.github.TeamNewPipe:NewPipeExtractor:v0.24.0")
+    implementation("net.jthink:jaudiotagger:3.0.1")
+
+    // Tests (comme dans ton modèle)
+    testImplementation(kotlin("test-junit5"))
+    testImplementation("org.assertj:assertj-core:3.24.2")
+    testRuntimeOnly("org.junit.platform:junit-platform-launcher")
+}
+
+// Correction du doublon logback-test.xml
+tasks.named<ProcessResources>("processFunctionalTestResources") {
+    duplicatesStrategy = DuplicatesStrategy.EXCLUDE
+}
+
+gradlePlugin {
+    testSourceSets(functionalTest)
+    plugins {
+        create("newpipePlugin") {
+            id = "com.cheroliv.newpipe"
+            implementationClass = "com.cheroliv.newpipe.DownloaderPlugin"
+        }
+    }
+}
+
+val functionalTestTask = tasks.register<Test>("functionalTest") {
+    description = "Runs functional tests."
+    group = "verification"
+    testClassesDirs = functionalTest.output.classesDirs
+    classpath = functionalTest.runtimeClasspath
+    useJUnitPlatform()
+}
+
+tasks.check { dependsOn(functionalTestTask) }
+
+publishing {
+    publications {
+        create<MavenPublication>("maven") {
+            from(components["java"])
+        }
+    }
 }

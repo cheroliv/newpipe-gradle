@@ -143,22 +143,24 @@ class YouTubeDownloader : VideoInfoProvider {
                 if (!response.isSuccessful)
                     throw DownloadException("Download request failed: ${response.code}")
 
-                val totalBytes      = response.body.contentLength()
+                val totalBytes      = response.body?.contentLength()
                 var downloadedBytes = 0L
                 var lastPercent     = 0
 
-                response.body.byteStream().use { input ->
+                response.body?.byteStream().use { input ->
                     BufferedOutputStream(FileOutputStream(outputFile), DOWNLOAD_BUFFER_SIZE).use { output ->
                         val buffer = ByteArray(DOWNLOAD_BUFFER_SIZE)
                         var bytesRead: Int
-                        while (input.read(buffer).also { bytesRead = it } != -1) {
+                        while (input?.read(buffer).also { bytesRead = it as Int} != -1) {
                             output.write(buffer, 0, bytesRead)
                             downloadedBytes += bytesRead
-                            if (totalBytes > 0) {
-                                val percent = ((downloadedBytes * 100) / totalBytes).toInt()
-                                if (percent != lastPercent) {
-                                    lastPercent = percent
-                                    onProgress(downloadedBytes, totalBytes, percent)
+                            if (totalBytes != null) {
+                                if (totalBytes > 0) {
+                                    val percent = ((downloadedBytes * 100) / totalBytes).toInt()
+                                    if (percent != lastPercent) {
+                                        lastPercent = percent
+                                        onProgress(downloadedBytes, totalBytes, percent)
+                                    }
                                 }
                             }
                         }

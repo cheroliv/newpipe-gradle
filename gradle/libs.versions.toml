@@ -1,9 +1,11 @@
 [versions]
 newpipe = "0.0.4"
+readme = "0.0.1"
 
 [libraries]
 
 [plugins]
 newpipe = { id = "com.cheroliv.newpipe", version.ref = "newpipe" }
+readme = { id = "com.cheroliv.readme", version.ref = "readme" }
 
 [bundles]

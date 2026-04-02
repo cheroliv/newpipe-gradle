@@ -72,6 +72,11 @@ open class DownloadMusicTask : DefaultTask() {
     @set:Option(option = "output", description = "Root destination folder (default: ./downloads)")
     var outputPath: String = ""
 
+    // Dans la section "Properties injected by NewpipeManager" — après forceDocker
+    @get:Input
+    @get:Optional
+    var sessionsPath: String = ""
+
     init {
         group = NEWPIPE_GROUP
         description = "Downloads all tunes and playlists from the YAML config and converts them to MP3"
@@ -118,6 +123,10 @@ open class DownloadMusicTask : DefaultTask() {
 
     @TaskAction
     fun download() {
+        if (!isMockMode) {
+            DownloaderImpl.init(NewpipeManager.buildSessionManager(sessionsPath))
+        }
+
         if (isMockMode) logger.info("*** Running in mock mode — no network calls will be made ***")
 
         val baseOutputDir = if (outputPath.isNotBlank()) File(outputPath)
