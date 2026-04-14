@@ -1,0 +1,438 @@
+= MP3 Organizer
+:toc: left
+:toclevels: 3
+:sectnums:
+:icons: font
+:description: Application d'organisation de collection MP3 avec PostgreSQL et IA locale
+
+[abstract]
+Architecture **PostgreSQL-centric** : toute la logique métier est dans la base de données (fonctions stockées, vues, procédures). Kotlin est un wrapper minimal qui appelle les fonctions PostgreSQL.
+
+== Architecture
+
+[source,txt]
+....
+┌─────────────────┐         ┌──────────────────┐
+│  Kotlin CLI     │ ──────> │  PostgreSQL      │
+│  (wrapper R2DBC)│         │  (logique métier)│
+└─────────────────┘         └──────────────────┘
+                                   │
+                                   ▼
+                          ┌──────────────────┐
+                          │  Fonctions       │
+                          │  fn_import_track │
+                          │  fn_export_*     │
+                          │  Vues v_*        │
+                          └──────────────────┘
+....
+
+== Démarrage
+
+=== 1. Démarrer PostgreSQL
+
+==== Option A: Via Portainer API
+
+Nécessite un bearer token Portainer.
+
+[source,bash]
+----
+export PORTAINER_BEARER_TOKEN=your_token_here
+./gradlew startDb
+----
+
+==== Option B: Via docker-compose
+
+[source,bash]
+----
+docker-compose up -d
+----
+
+==== Vérification
+
+[source,bash]
+----
+docker ps | grep postgres
+# postgres-mp3-organizer   Up    0.0.0.0:5432->5432/tcp
+----
+
+=== 2. Scanner les MP3 (MULTIPLES dossiers supportés)
+
+==== Un seul dossier
+
+[source,bash]
+----
+./gradlew scanMp3 --args="/home/user/Music"
+----
+
+==== Plusieurs dossiers (n'importe où dans le système)
+
+[source,bash]
+----
+./gradlew scanMp3 --args="/home/user/Music /mnt/usb/Music /media/USB"
+----
+
+==== Séparateurs acceptés
+
+Espace, virgule, point-virgule :
+
+[source,bash]
+----
+./gradlew scanMp3 --args="/path1,/path2,/path3"
+./gradlew scanMp3 --args="/path1;/path2;/path3"
+----
+
+=== 3. Exports
+
+[cols="1,2",options="header"]
+|===
+|Commande |Fichier généré
+
+|`./gradlew exportJson`
+|`exports/mp3-collection.json`
+
+|`./gradlew exportYaml`
+|`exports/mp3-collection.yaml`
+
+|`./gradlew exportXml`
+|`exports/mp3-collection.xml`
+
+|`./gradlew exportSql`
+|`exports/mp3-collection.sql`
+|===
+
+=== 4. Requêtes métier
+
+[source,bash]
+----
+./gradlew businessQueries
+----
+
+Affiche :
+
+* Top 10 artistes par nombre de tracks
+* Fichiers < 2MB (candidats suppression)
+* Tracks sans métadonnées
+* Clips vidéo
+* Résumé collection
+
+=== 5. Organiser les fichiers
+
+[source,bash]
+----
+./gradlew organizeFiles
+----
+
+Déplace les fichiers dans des dossiers par artiste :
+
+[source,txt]
+....
+/media/USB/
+├── 2MTV/
+│   └── 2MTV - Titre.mp3
+├── L'Algérino/
+│   ├── L'Algérino - Le prince de la ville.mp3
+│   └── L'Algérino - International.mp3
+└── Mido Belahbib/
+    └── Mido Belahbib - Raha Tsnapili.mp3
+....
+
+=== 6. Processus complet (avec multiples dossiers)
+
+==== Dossier unique
+
+[source,bash]
+----
+./gradlew fullProcess
+----
+
+==== Plusieurs dossiers sources
+
+[source,bash]
+----
+./gradlew fullProcess --args="/home/Music /mnt/usb/Music"
+----
+
+Exécute dans l'ordre :
+
+. Scan MP3
+. Export JSON
+. Export YAML
+. Export XML
+. Export SQL
+. Requêtes métier
+
+== Schéma PostgreSQL
+
+=== Tables
+
+[cols="1,3",options="header"]
+|===
+|Table |Description
+
+|`artists`
+|Artistes (id, name, created_at)
+
+|`albums`
+|Albums (id, title, artist_id, year, created_at)
+
+|`tracks`
+|Pistes MP3 (id, title, artist_id, album_id, file_path, file_size_bytes, duration_seconds, bitrate_kbps, sample_rate, has_video, created_at)
+
+|`genres`
+|Genres musicaux (id, name)
+
+|`track_genres`
+|Relation many-to-many tracks/genres
+
+|`scan_history`
+|Historique des scans
+
+|`export_history`
+|Historique des exports
+|===
+
+=== Fonctions stockées (logique métier)
+
+[cols="1,3",options="header"]
+|===
+|Fonction |Description
+
+|`fn_import_track(...)`
+|Importe un track avec upsert (artist, album, genre)
+
+|`fn_upsert_artist(name)`
+|Crée ou met à jour un artiste, retourne l'ID
+
+|`fn_upsert_album(title, artist_id, year)`
+|Crée ou met à jour un album, retourne l'ID
+
+|`fn_upsert_genre(name)`
+|Crée ou met à jour un genre, retourne l'ID
+
+|`fn_delete_small_tracks(threshold_bytes)`
+|Supprime les fichiers < seuil, retourne le nombre supprimé
+
+|`fn_get_files_to_organize()`
+|Retourne la liste des fichiers à organiser par artiste
+
+|`fn_update_track_path(track_id, new_path)`
+|Met à jour le chemin d'un track après organisation
+
+|`fn_export_full_collection()`
+|Export JSON complet de la collection
+
+|`fn_business_stats()`
+|Statistiques métier (top artistes, fichiers manquants, etc.)
+|===
+
+=== Vues
+
+[cols="1,3",options="header"]
+|===
+|Vue |Description
+
+|`v_tracks_full`
+|Tracks avec artiste, album, genres, taille formatée
+
+|`v_artist_stats`
+|Stats par artiste (track_count, album_count, taille, durée)
+
+|`v_small_files`
+|Fichiers < 2MB avec taille formatée
+
+|`v_tracks_by_genre`
+|Tracks groupés par genre
+
+|`v_collection_stats`
+|Stats globales de la collection
+|===
+
+== Supprimer les MP3 < 2MB
+
+=== Via SQL
+
+[source,sql]
+----
+-- Supprime les fichiers < 2MB
+SELECT fn_delete_small_tracks(2097152);
+
+-- Aperçu avant suppression
+SELECT * FROM v_small_files ORDER BY file_size_bytes DESC;
+----
+
+=== Via tâche Gradle (à créer)
+
+[source,bash]
+----
+./gradlew deleteSmallFiles --args="2097152"
+----
+
+== Dépendances
+
+=== Backend
+
+* Kotlin 1.9
+* R2DBC PostgreSQL
+* Jackson (JSON/XML/YAML)
+* JAudiotagger (tags MP3)
+* OkHttp (Portainer API)
+* Coroutines
+* LangChain4j (IA locale)
+
+=== IA Locale
+
+* Ollama (LLM local: `gemma2:2b-it-q4_K_M`)
+
+== Configuration Ollama
+
+=== 1. Installer Ollama
+
+[source,bash]
+----
+curl -fsSL https://ollama.ai/install.sh | sh
+----
+
+=== 2. Tirer le modèle
+
+[source,bash]
+----
+ollama pull gemma2:2b-it-q4_K_M
+----
+
+=== 3. Vérifier
+
+[source,bash]
+----
+ollama list
+
+# NAME                      ID              SIZE      MODIFIED
+# gemma2:2b-it-q4_K_M       abc123          1.6GB     2 hours ago
+----
+
+=== 4. Lancer (optionnel, service auto-start)
+
+[source,bash]
+----
+ollama serve
+----
+
+== Tâches IA
+
+=== Chat interactif
+
+Pour poser des questions sur la DB, le code, etc.
+
+[source,bash]
+----
+./gradlew llmChat --args="quelle est la structure de la DB?"
+----
+
+=== Générer SQL depuis prompt
+
+Traduit un prompt en langage naturel en requête SQL.
+
+[source,bash]
+----
+./gradlew sqlPrompt --args="top 10 artistes par nombre de tracks"
+----
+
+Exemples de prompts :
+
+* `"afficher les albums sortis après 2015"`
+* `"liste des fichiers de plus de 10MB"`
+* `"durée totale par artiste"`
+
+=== Maintenance projet
+
+Analyse les dépendances, détecte le code dupliqué, suggère des refactorisations.
+
+[source,bash]
+----
+./gradlew maintenance
+----
+
+=== Analyser/optimiser requête SQL
+
+[source,bash]
+----
+./gradlew analyzeQuery --args="SELECT * FROM tracks WHERE file_size_bytes < 2000000"
+----
+
+Analyse depuis un fichier :
+
+[source,bash]
+----
+./gradlew analyzeQuery --args="@exports/my-query.sql"
+----
+
+== Structure du projet
+
+[source,txt]
+....
+mp3-organizer/
+├── build.gradle.kts          # Configuration Gradle
+├── docker-compose.yml        # PostgreSQL Docker
+├── README.adoc               # Ce fichier
+├── whatismissing.adoc        # Fonctionnalités manquantes
+├── src/
+│   ├── main/
+│   │   ├── kotlin/com/mp3organizer/
+│   │   │   ├── Database.kt           # Wrapper R2DBC
+│   │   │   ├── Mp3Scanner.kt         # Scanner MP3
+│   │   │   ├── Mp3ScannerKt.kt       # Task scanMp3
+│   │   │   ├── Models.kt             # Data classes
+│   │   │   ├── Export*.kt            # Tasks export
+│   │   │   ├── BusinessQueries.kt    # Task businessQueries
+│   │   │   ├── OrganizeFiles.kt      # Task organizeFiles
+│   │   │   ├── FullProcess.kt        # Task fullProcess
+│   │   │   ├── PortainerClient.kt    # Task startDb
+│   │   │   └── ai/
+│   │   │       ├── LlmClient.kt          # Client Ollama
+│   │   │       ├── SqlGenerationAgent.kt # Prompt → SQL
+│   │   │       ├── MaintenanceAgent.kt   # Maintenance code
+│   │   │       ├── ChatTask.kt           # Task llmChat
+│   │   │       ├── SqlPromptTask.kt      # Task sqlPrompt
+│   │   │       ├── MaintenanceTask.kt    # Task maintenance
+│   │   │       └── AnalyzeQueryTask.kt   # Task analyzeQuery
+│   │   ├── sql/
+│   │   │   └── 01_schema.sql   # Schéma + fonctions + vues
+│   │   └── resources/
+│   │       └── logback.xml     # Configuration logging
+│   └── test/
+│       └── kotlin/             # Tests unitaires (à créer)
+└── exports/                    # Fichiers exportés (généré)
+    ├── mp3-collection.json
+    ├── mp3-collection.yaml
+    ├── mp3-collection.xml
+    └── mp3-collection.sql
+....
+
+== Commandes rapides
+
+[source,bash]
+----
+# Démarrer la DB
+docker-compose up -d
+
+# Scanner une collection
+./gradlew scanMp3 --args="/home/Music /mnt/usb/Music"
+
+# Voir les stats
+./gradlew businessQueries
+
+# Exporter tout
+./gradlew exportJson exportYaml exportXml exportSql
+
+# Nettoyer les petits fichiers
+docker exec -it postgres-mp3-organizer psql -U mp3user -d mp3db -c "SELECT fn_delete_small_tracks(2097152);"
+
+# Arrêter la DB
+docker-compose down
+----
+
+== Voir aussi
+
+* link:whatismissing.adoc[Ce qui manque - Roadmap et améliorations]
+* https://ollama.ai[Ollama - LLM local]
+* https://langchain4j.dev[LangChain4j - IA pour Java/Kotlin]
+* https://r2dbc.io[R2DBC - Reactive Database Connectivity]

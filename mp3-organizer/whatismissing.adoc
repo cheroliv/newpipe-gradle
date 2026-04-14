@@ -1,0 +1,517 @@
+= MP3 Organizer - Ce qui manque
+:toc: left
+:toclevels: 3
+:sectnums:
+:icons: font
+
+[abstract]
+Ce document liste les fonctionnalités manquantes et améliorations possibles pour le projet MP3 Organizer, organisé par priorité.
+
+== Contexte
+
+Le projet MP3 Organizer est une application **PostgreSQL-centric** qui permet de :
+
+* Scanner des fichiers MP3 depuis de multiples dossiers sources
+* Extraire les métadonnées (tags ID3) via JAudiotagger
+* Stocker dans PostgreSQL avec fonctions stockées et vues
+* Exporter en JSON, YAML, XML, SQL
+* Utiliser une IA locale (Ollama + LangChain4j) pour générer du SQL depuis un prompt
+
+== 1. Critique (à faire en priorité)
+
+Ces éléments bloquent une utilisation en production.
+
+=== 1.1. Tests unitaires
+
+[cols="1,2,1",options="header"]
+|===
+|Manque |Pourquoi |Priorité
+
+|Aucun test unitaire
+|Aucune validation du code, régressions possibles
+|Haute
+
+|Pas de tests d'intégration
+|PostgreSQL + R2DBC non testés
+|Haute
+
+|Pas de tests fonctionnels
+|Le scanner MP3 n'est pas validé
+|Haute
+|===
+
+[source,console]
+----
+# Fichiers à créer
+src/test/kotlin/com/mp3organizer/
+  ├── DatabaseTest.kt
+  ├── Mp3ScannerTest.kt
+  ├── DatabaseIntegrationTest.kt
+  └── ai/
+      ├── SqlGenerationAgentTest.kt
+      └── MaintenanceAgentTest.kt
+----
+
+=== 1.2. Gestion des erreurs DB
+
+[cols="1,2,1",options="header"]
+|===
+|Manque |Pourquoi |Priorité
+|===
+
+* Pas de retry sur échec de connexion
+* Pas de timeout configuré sur les requêtes
+* Connection pool non tuné (maxSize, idle, etc.)
+* Pas de circuit breaker
+
+=== 1.3. Configuration externalisée
+
+[cols="1,2,1",options="header"]
+|===
+|Manque |Pourquoi |Priorité
+|===
+
+* DB credentials en dur dans `DatabaseConfig`
+* Pas de fichier `application.conf` ou `.env`
+* Pas de support pour variables d'environnement
+* Ollama URL et modèle hardcodés
+
+[source,kotlin]
+----
+// Actuel - à éviter
+data class DatabaseConfig(
+    val host: String = "localhost",
+    val password: String = "mp3password"  // ❌
+)
+
+// Souhaité
+val config = ConfigFactory.load()
+val password = config.getString("db.password") 
+               ?: System.getenv("DB_PASSWORD")
+----
+
+=== 1.4. Gradle Wrapper
+
+[cols="1,2,1",options="header"]
+|===
+|Manque |Pourquoi |Priorité
+|===
+
+* `gradlew` peut manquer sur certaines machines
+* Version de Gradle non verrouillée
+|Haute
+
+[source,console]
+----
+# À exécuter
+gradle wrapper --gradle-version 8.6
+----
+
+== 2. Important (fonctionnalités manquantes)
+
+Ces fonctionnalités sont attendues pour une expérience complète.
+
+=== 2.1. Scan incrémental
+
+[cols="1,2,1",options="header"]
+|===
+|Manque |Pourquoi |Priorité
+|===
+
+* Rescan de TOUS les fichiers à chaque exécution
+* Lent pour 2308+ fichiers
+* Pas de détection "nouveau fichier"
+
+[source,sql]
+----
+-- Solution: comparer avec l'historique
+SELECT file_path, file_size_bytes, updated_at
+FROM tracks
+WHERE updated_at < NOW() - INTERVAL '1 day'
+----
+
+=== 2.2. Détection de doublons
+
+[cols="1,2,1",options="header"]
+|===
+|Manque |Pourquoi |Priorité
+|===
+
+* Pas de détection fichiers dupliqués
+* Même chanson dans plusieurs dossiers
+* Gaspillage d'espace disque
+
+[source,kotlin]
+----
+// Hash MD5/SHA256 pour détection
+fun File.md5(): String {
+    val md = MessageDigest.getInstance("MD5")
+    return inputStream().use { 
+        it.copyTo(DigestOutputStream(md)) 
+    }
+    md.digest().toHexString()
+}
+----
+
+=== 2.3. Tâche Gradle deleteSmallFiles
+
+[cols="1,2,1",options="header"]
+|===
+|Manque |Pourquoi |Priorité
+|===
+
+* Fonction SQL `fn_delete_small_tracks()` existe
+| Moyenne
+|===
+
+[source,console]
+----
+# Tâche à créer
+./gradlew deleteSmallFiles --args="2097152"  # 2MB
+----
+
+=== 2.4. Portainer API complète
+
+[cols="1,2,1",options="header"]
+|===
+|Manque |Pourquoi |Priorité
+|===
+
+* Bearer token non géré proprement
+| Moyenne
+|===
+
+* Pas de refresh token automatique
+* Gestion des erreurs API incomplète
+
+=== 2.5. Gradle Version Catalog
+
+[cols="1,2,1",options="header"]
+|===
+|Manque |Pourquoi |Priorité
+|===
+
+* Dépendances en dur dans `build.gradle.kts`
+| Moyenne
+|===
+
+[source,toml]
+----
+# gradle/libs.versions.toml
+[versions]
+kotlin = "1.9.22"
+langchain4j = "0.35.0"
+r2dbc = "1.0.4"
+
+[libraries]
+kotlin-stdlib = { module = "org.jetbrains.kotlin:kotlin-stdlib", version.ref = "kotlin" }
+----
+
+=== 2.6. Batch inserts
+
+[cols="1,2,1",options="header"]
+|===
+|Manque |Pourquoi |Priorité
+|===
+
+* Insert 1 par 1 (lent pour 2308 fichiers)
+| Moyenne
+|===
+
+[source,kotlin]
+----
+// Actuel: 1 insert = 1 transaction
+db.importTrack(...)
+
+// Souhaité: batch de 50-100
+db.importTracksBatch(listOf(...), batchSize = 50)
+----
+
+== 3. Souhaitable (améliorations)
+
+Ces éléments améliorent l'expérience mais ne sont pas bloquants.
+
+=== 3.1. CI/CD
+
+* GitHub Actions pour tests automatiques
+* Validation PR automatique
+* Build et publish sur tag
+
+[source,yaml]
+----
+# .github/workflows/ci.yml
+name: CI
+on: [push, pull_request]
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    services:
+      postgres: ...
+    steps:
+      - uses: actions/checkout@v4
+      - run: ./gradlew test
+----
+
+=== 3.2. Dockerfile
+
+* Containeriser l'application Kotlin
+* Multi-stage build pour image légère
+* Docker Compose avec PostgreSQL
+
+[source,dockerfile]
+----
+# Dockerfile
+FROM gradle:8.6-jdk17 AS build
+COPY . /app
+WORKDIR /app
+RUN gradle build --no-daemon
+
+FROM eclipse-temurin:17-jre-alpine
+COPY --from=build /app/build/libs/*.jar /app/mp3-organizer.jar
+ENTRYPOINT ["java", "-jar", "/app/mp3-organizer.jar"]
+----
+
+=== 3.3. API REST
+
+* Exposer la collection via HTTP
+* Endpoints: `/artists`, `/albums`, `/tracks`, `/search`
+* Framework: Ktor ou Spring Boot
+
+[source,kotlin]
+----
+// Ktor example
+get("/api/artists/{id}/tracks") {
+    val artistId = call.parameters["id"]!!.toInt()
+    val tracks = db.query("SELECT * FROM v_tracks_full WHERE artist_id = $1", artistId)
+    call.respond(tracks)
+}
+----
+
+=== 3.4. Web UI
+
+* Interface pour naviguer dans la collection
+* Recherche full-text
+* Lecteur audio intégré
+* Framework: React, Vue, ou Svelte
+
+=== 3.5. Backup DB
+
+* Dump PostgreSQL automatique
+* Planification cron ou task Gradle
+* Restore facilité
+
+[source,console]
+----
+# Tâche à créer
+./gradlew backupDb --args="/backups/mp3-db-2024-01-15.sql"
+./gradlew restoreDb --args="/backups/mp3-db-2024-01-15.sql"
+----
+
+=== 3.6. Support des playlists
+
+* Import playlists M3U / PLS
+* Association tracks → playlists
+* Export playlists
+
+[source,kotlin]
+----
+data class Playlist(
+    val name: String,
+    val tracks: List<Int>  // track IDs
+)
+----
+
+=== 3.7. Monitoring
+
+* Health checks (`/health`, `/ready`)
+* Métriques (Prometheus)
+* Logs structurés (JSON)
+
+=== 3.8. Logging structuré
+
+[source,kotlin]
+----
+// Actuel
+logger.info("Scan complete: $count files")
+
+// Souhaité (JSON)
+logger.info(mapOf(
+    "event" to "scan_complete",
+    "count" to count,
+    "timestamp" to Instant.now()
+))
+----
+
+== 4. Roadmap suggérée
+
+=== Iteration 1 (Critique - 1-2 semaines)
+
+[options="header"]
+|===
+|Tâche |Effort |Valeur
+|===
+
+| Tests unitaires + integration
+| 3 jours
+| Haute
+
+| Configuration externalisée
+| 1 jour
+| Haute
+
+| Gradle version catalog
+| 0.5 jour
+| Moyenne
+
+| Connection pool tuning
+| 0.5 jour
+| Haute
+
+| **Total** | **5 jours** | 
+
+=== Iteration 2 (Fonctionnalités - 1-2 semaines)
+
+[options="header"]
+|===
+|Tâche |Effort |Valeur
+|===
+
+| Scan incrémental
+| 2 jours
+| Haute
+
+| Détection doublons
+| 2 jours
+| Moyenne
+
+| Tâche deleteSmallFiles
+| 0.5 jour
+| Moyenne
+
+| Batch inserts
+| 1 jour
+| Haute
+
+| **Total** | **5.5 jours** | 
+
+=== Iteration 3 (Production - 1 semaine)
+
+[options="header"]
+|===
+|Tâche |Effort |Valeur
+|===
+
+| CI/CD GitHub Actions
+| 1 jour
+| Haute
+
+| Dockerfile multi-stage
+| 1 jour
+| Moyenne
+
+| Backup automatique DB
+| 0.5 jour
+| Haute
+
+| Health checks
+| 0.5 jour
+| Moyenne
+
+| **Total** | **3 jours** | 
+
+=== Iteration 4 (Optionnel - 2-3 semaines)
+
+[options="header"]
+|===
+|Tâche |Effort |Valeur
+|===
+
+| API REST (Ktor)
+| 3 jours
+| Moyenne
+
+| Web UI (Vue/React)
+| 5 jours
+| Faible
+
+| Playlists M3U
+| 2 jours
+| Faible
+
+| Monitoring Prometheus
+| 2 jours
+| Faible
+
+| **Total** | **12 jours** | 
+
+== 5. Résumé par catégorie
+
+=== Code Quality
+
+* [ ] Tests unitaires
+* [ ] Tests d'intégration
+* [ ] Tests fonctionnels
+* [ ] Couverture > 80%
+
+=== DevOps
+
+* [ ] CI/CD
+* [ ] Dockerfile
+* [ ] Backup DB
+* [ ] Monitoring
+
+=== Features
+
+* [ ] Scan incrémental
+* [ ] Détection doublons
+* [ ] Playlists M3U
+* [ ] API REST
+* [ ] Web UI
+
+=== Configuration
+
+* [ ] Externalisée (HOCON/YAML)
+* [ ] Variables d'environnement
+* [ ] Version catalog
+* [ ] Secrets management
+
+== 6. Fichiers à créer (checklist)
+
+[source,console]
+----
+# Tests
+[ ] src/test/kotlin/com/mp3organizer/DatabaseTest.kt
+[ ] src/test/kotlin/com/mp3organizer/Mp3ScannerTest.kt
+[ ] src/test/kotlin/com/mp3organizer/ai/SqlGenerationAgentTest.kt
+[ ] src/functionalTest/kotlin/... (tests intégration)
+
+# Configuration
+[ ] src/main/resources/application.conf
+[ ] src/main/resources/application.local.conf (gitignore)
+[ ] gradle/libs.versions.toml
+
+# CI/CD
+[ ] .github/workflows/ci.yml
+[ ] .github/workflows/release.yml
+
+# Docker
+[ ] Dockerfile
+[ ] .dockerignore
+[ ] docker-compose.prod.yml
+
+# Documentation
+[ ] CONTRIBUTING.adoc
+[ ] ARCHITECTURE.adoc
+[ ] API.adoc (si API REST)
+----
+
+== 7. Conclusion
+
+Le projet est **fonctionnel** mais nécessite des améliorations pour une utilisation en production :
+
+1. **Priorité absolue** : Tests + Configuration externalisée
+2. **Ensuite** : Scan incrémental + Batch inserts (performance)
+3. **Optionnel** : API REST + Web UI (expérience utilisateur)
+
+[quote]
+Le code est un jardin : il faut le cultiver régulièrement, pas juste le planter une fois.

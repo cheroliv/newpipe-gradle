@@ -1,0 +1,23 @@
+version: '3.8'
+
+services:
+  postgres-mp3:
+    image: postgres:16-alpine
+    container_name: postgres-mp3-organizer
+    environment:
+      POSTGRES_USER: mp3user
+      POSTGRES_PASSWORD: mp3password
+      POSTGRES_DB: mp3db
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./src/main/sql:/docker-entrypoint-initdb.d
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U mp3user -d mp3db"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  postgres_data:
