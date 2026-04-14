@@ -57,5 +57,5 @@ class SessionManager(sessions: List<Session>) {
     }
 
     /** True if at least one session is still valid. */
-    fun hasValidSession(): Boolean = all.any { it.id !in invalidIds }
+    fun hasValidSession(): Boolean = all.any { session -> session.id !in invalidIds }
 }

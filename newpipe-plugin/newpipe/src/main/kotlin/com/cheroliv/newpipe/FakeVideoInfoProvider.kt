@@ -25,7 +25,7 @@ class FakeVideoInfoProvider : VideoInfoProvider {
         uploaderName = FAKE_ARTIST,
         duration     = FAKE_DURATION,
         url          = url,
-        streamInfo   = null
+        streamInfo   = null   // not needed — downloadBestAudio creates a file directly
     )
 
     override suspend fun getPlaylistVideoUrls(playlistUrl: String): List<String> =
@@ -40,12 +40,6 @@ class FakeVideoInfoProvider : VideoInfoProvider {
         outputFile.createNewFile()
         outputFile
     }
-
-    /**
-     * Always returns 0 — no stream info available in fake/test mode.
-     * [alreadyDownloaded] ignores the bitrate check when this returns 0.
-     */
-    override fun getBestAvailableBitrateKbps(metadata: VideoMetadata): Int = 0
 
     override fun sanitizeFileName(name: String): String =
         name.replace(Regex("[^a-zA-Z0-9 \\-_]"), "").trim()

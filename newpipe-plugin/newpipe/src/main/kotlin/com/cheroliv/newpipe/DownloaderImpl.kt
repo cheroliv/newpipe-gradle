@@ -9,99 +9,59 @@ import org.schabi.newpipe.extractor.downloader.Downloader
 import org.schabi.newpipe.extractor.downloader.Request as NewPipeRequest
 import org.schabi.newpipe.extractor.downloader.Response as NewPipeResponse
 import org.schabi.newpipe.extractor.exceptions.ReCaptchaException
-import org.slf4j.LoggerFactory
 import java.util.concurrent.TimeUnit
 
 /**
- * NewPipe Extractor [Downloader] backed by OkHttp.
+ * NewPipe Extractor [Downloader] implementation backed by OkHttp.
  *
- * When a [SessionManager] is available, each request is decorated with
- * `Authorization: Bearer <accessToken>` from the next session in Round-Robin.
- *
- * On HTTP 401/403 the session is marked invalid and the request is retried
- * once anonymously — avoids dropping an entire download because one token
- * expired between [AuthSessionTask] and the actual request.
- *
- * The [httpClient] singleton is shared with [YouTubeDownloader] so both
- * metadata extraction and audio download reuse the same connection pool
- * and thread pool.
+ * The [httpClient] singleton is shared with [YouTubeDownloader] so that
+ * both metadata extraction and audio download reuse the same connection
+ * pool and thread pool — avoiding redundant TCP/TLS handshakes.
  */
-class DownloaderImpl private constructor(
-    private val sessionManager: SessionManager? = null
-) : Downloader() {
+class DownloaderImpl private constructor() : Downloader() {
 
-    private val logger = LoggerFactory.getLogger(DownloaderImpl::class.java)
     private val client get() = httpClient
 
     companion object {
+        /**
+         * Shared OkHttpClient — one instance for the entire plugin lifecycle.
+         * OkHttp is designed as a singleton: each instance owns its own
+         * connection pool and dispatcher thread pool.
+         */
         val httpClient: OkHttpClient = OkHttpClient.Builder()
             .connectTimeout(30, TimeUnit.SECONDS)
-            .readTimeout(60, TimeUnit.SECONDS)
+            .readTimeout(60, TimeUnit.SECONDS)  // audio streams can be slow to start
             .writeTimeout(30, TimeUnit.SECONDS)
             .build()
 
-        @Volatile
-        private var instance: DownloaderImpl = DownloaderImpl()
+        private val instance = DownloaderImpl()
 
         fun getInstance(): DownloaderImpl = instance
-
-        /**
-         * Replaces the singleton with an instance backed by [sessionManager].
-         * Called by [DownloadMusicTask] at the start of its [TaskAction],
-         * after [AuthSessionTask] has written fresh tokens to sessions.yml.
-         */
-        fun init(sessionManager: SessionManager?) {
-            instance = DownloaderImpl(sessionManager)
-        }
     }
 
     override fun execute(request: NewPipeRequest): NewPipeResponse {
-        val session = sessionManager?.next()
-        return try {
-            doExecute(request, session)
-        } catch (e: SessionExpiredException) {
-            // Token expired between auth and execution — mark invalid, retry anonymous
-            logger.warn("Retrying anonymously after session expiry: ${request.url()}")
-            doExecute(request, session = null)
-        }
-    }
+        // POST requests with no body require an explicit empty body
+        val requestBody: RequestBody? = if (request.httpMethod() == "POST" && request.dataToSend() == null) {
+            val content = ByteArray(0)
+            content.toRequestBody(null, 0, content.size)
+        } else request.dataToSend()?.let { data -> data.toRequestBody(null, 0, data.size) }
 
-    private fun doExecute(request: NewPipeRequest, session: Session?): NewPipeResponse {
-        val requestBody: RequestBody? =
-            if (request.httpMethod() == "POST" && request.dataToSend() == null) {
-                ByteArray(0).toRequestBody(null, 0, 0)
-            } else {
-                request.dataToSend()?.let { it.toRequestBody(null, 0, it.size) }
-            }
-
-        val builder = Request.Builder()
+        val requestBuilder = Request.Builder()
             .url(request.url())
             .method(request.httpMethod(), requestBody)
 
         // Forward all headers from the NewPipe request
         request.headers().forEach { (key, values) ->
-            values.forEach { value -> builder.addHeader(key, value) }
-        }
-
-        // Inject Bearer token — no cookie spoofing, no User-Agent override
-        if (session != null) {
-            builder.header("Authorization", "Bearer ${session.accessToken}")
-            logger.debug("Request via session '${session.id}': ${request.url()}")
+            values.forEach { value -> requestBuilder.addHeader(key, value) }
         }
 
         val response: Response = try {
-            client.newCall(builder.build()).execute()
+            client.newCall(requestBuilder.build()).execute()
         } catch (e: Exception) {
             throw ReCaptchaException("Network error: ${e.message}", e.cause?.message)
         }
 
-        if (session != null && (response.code == 401 || response.code == 403)) {
-            sessionManager?.markInvalid(session.id)
-            response.close()
-            throw SessionExpiredException(session.id, response.code)
-        }
-
-        val responseBody = response.body?.string()
+        val responseBody = response.body.string()
         val headers = mutableMapOf<String, MutableList<String>>()
         response.headers.names().forEach { name ->
             headers[name] = response.headers.values(name).toMutableList()
@@ -115,7 +75,4 @@ class DownloaderImpl private constructor(
             request.url()
         )
     }
-
-    private class SessionExpiredException(sessionId: String, code: Int) :
-        Exception("Session '$sessionId' returned HTTP $code")
 }

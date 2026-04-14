@@ -28,13 +28,6 @@ interface VideoInfoProvider {
         onProgress: (downloaded: Long, total: Long, percent: Int) -> Unit
     ): File
     fun sanitizeFileName(name: String): String
-
-    /**
-     * Returns the bitrate (kbps) of the best audio stream available for [metadata],
-     * using the same selection ladder as [downloadBestAudio].
-     * Returns 0 if no stream with bitrate info is available (e.g. in fake/test mode).
-     */
-    fun getBestAvailableBitrateKbps(metadata: VideoMetadata): Int
 }
 
 /**
@@ -42,20 +35,12 @@ interface VideoInfoProvider {
  * with either the real implementation or a test fake.
  */
 interface AudioConverter {
-    /**
-     * Returns true if [mp3File] is already a fully downloaded, correctly tagged file
-     * that is at least as good as the best available stream quality.
-     *
-     * @param bestAvailableBitrateKbps  Bitrate of the best YouTube stream currently available.
-     *                                  Pass 0 to skip the quality upgrade check (test/fake mode).
-     */
     fun alreadyDownloaded(
         mp3File: File,
         title: String,
         artist: String,
         youtubeDurationSeconds: Long,
-        toleranceSeconds: Long = 2L,
-        bestAvailableBitrateKbps: Int = 0
+        toleranceSeconds: Long = 2L
     ): Boolean
     suspend fun convertToMp3(inputFile: File, outputFile: File, bitrate: String = "192k"): File
     suspend fun addMetadata(

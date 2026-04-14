@@ -12,17 +12,19 @@ class FakeAudioConverter : AudioConverter {
 
     /**
      * Always returns false so every track goes through the full (fake) download flow.
-     * [bestAvailableBitrateKbps] is ignored — quality upgrade logic is not tested here.
+     * Override in specific scenarios to test the duplicate-skip behaviour.
      */
     override fun alreadyDownloaded(
         mp3File: File,
         title: String,
         artist: String,
         youtubeDurationSeconds: Long,
-        toleranceSeconds: Long,
-        bestAvailableBitrateKbps: Int
+        toleranceSeconds: Long
     ): Boolean = false
 
+    /**
+     * Renames / copies the temp file to the output path without invoking FFmpeg.
+     */
     override suspend fun convertToMp3(inputFile: File, outputFile: File, bitrate: String): File {
         inputFile.renameTo(outputFile)
         if (!outputFile.exists()) withContext(Dispatchers.IO) {
@@ -31,6 +33,9 @@ class FakeAudioConverter : AudioConverter {
         return outputFile
     }
 
+    /**
+     * No-op — jaudiotagger is not called in tests.
+     */
     override suspend fun addMetadata(
         mp3File: File,
         title: String?,

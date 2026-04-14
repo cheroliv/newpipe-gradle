@@ -24,7 +24,12 @@ data class SessionCredentials(
     val clientId: String,
     val clientSecret: String,
     var refreshToken: String = ""
-)
+) {
+    fun toSession(): Session? {
+        if (refreshToken.isBlank()) return null
+        return Session(this)
+    }
+}
 
 /**
  * YAML root — maps directly to sessions.yml.
