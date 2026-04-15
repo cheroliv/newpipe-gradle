@@ -16,7 +16,7 @@
 ++++
 
 image:https://img.shields.io/badge/Kotlin-2.x-7F52FF?logo=kotlin[Kotlin]
-image:https://img.shields.io/badge/Gradle-8.x-02303A?logo=gradle[Gradle]
+image:https://img.shields.io/badge/Gradle-9.4.1-02303A?logo=gradle[Gradle]
 image:https://img.shields.io/badge/License-Apache%202.0-blue.svg[License]
 
 A Gradle plugin to download music from YouTube and convert it to MP3 — no Python required.
