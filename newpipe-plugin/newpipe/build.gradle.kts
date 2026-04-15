@@ -122,9 +122,6 @@ publishing {
                 }
             }
         }
-        create<MavenPublication>("maven") {
-            from(components["java"])
-        }
     }
     repositories {
         maven {
@@ -139,7 +136,6 @@ publishing {
                 password = project.findProperty("ossrhPassword") as? String
             }
         }
-        mavenCentral()
     }
 }
 
