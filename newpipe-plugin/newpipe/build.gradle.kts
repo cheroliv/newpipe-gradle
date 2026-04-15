@@ -6,7 +6,8 @@ plugins {
 }
 
 group = "com.cheroliv.newpipe"
-version = "0.1.0-SNAPSHOT"
+//version = "0.0.5"
+version = libs.plugins.newpipe.get().version
 
 // Utilisation de la toolchain comme dans ton modèle
 kotlin.jvmToolchain(11)
