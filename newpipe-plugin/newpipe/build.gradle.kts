@@ -87,26 +87,6 @@ tasks.test {
     useJUnitPlatform()
 }
 
-kover {
-    currentProject {
-        sources {
-            includedSourceSets.addAll("main", "functionalTest")
-        }
-    }
-    reports {
-        total {
-            html {
-                onCheck.set(true)
-                htmlDir.set(layout.buildDirectory.dir("reports/kover/html"))
-            }
-            xml {
-                onCheck.set(true)
-                xmlFile.set(layout.buildDirectory.file("reports/kover/xml/report.xml"))
-            }
-        }
-    }
-}
-
 publishing {
     publications {
         create<MavenPublication>("maven") {
