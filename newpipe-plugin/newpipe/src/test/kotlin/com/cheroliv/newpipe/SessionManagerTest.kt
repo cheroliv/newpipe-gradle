@@ -93,4 +93,62 @@ class SessionManagerTest {
         assertThat(manager.next()).isNull()
         assertThat(manager.hasValidSession()).isFalse()
     }
+
+    @Test
+    fun `records errors without marking session invalid`() {
+        val sessions = listOf(
+            Session(SessionCredentials("session-1", "cid-1", "cs-1", "rt-1"))
+        )
+        val manager = SessionManager(sessions)
+        val errorHandler = AuthErrorHandler()
+        val errorResult = errorHandler.handleHttpError(429, "session-1")
+
+        manager.recordError("session-1", errorResult)
+
+        assertThat(manager.hasValidSession()).isTrue()
+        assertThat(manager.getErrors()).containsKey("session-1")
+    }
+
+    @Test
+    fun `returns all recorded errors`() {
+        val sessions = listOf(
+            Session(SessionCredentials("session-1", "cid-1", "cs-1", "rt-1")),
+            Session(SessionCredentials("session-2", "cid-2", "cs-2", "rt-2"))
+        )
+        val manager = SessionManager(sessions)
+        val errorHandler = AuthErrorHandler()
+
+        manager.recordError("session-1", errorHandler.handleHttpError(429, "session-1"))
+        manager.recordError("session-2", errorHandler.handleOAuthError("invalid_grant", "revoked", "session-2"))
+
+        val errors = manager.getErrors()
+
+        assertThat(errors).hasSize(2)
+        assertThat(errors).containsKeys("session-1", "session-2")
+    }
+
+    @Test
+    fun `logErrorSummary does not throw with errors`() {
+        val sessions = listOf(
+            Session(SessionCredentials("session-1", "cid-1", "cs-1", "rt-1"))
+        )
+        val manager = SessionManager(sessions)
+        val errorHandler = AuthErrorHandler()
+
+        manager.recordError("session-1", errorHandler.handleHttpError(401, "session-1"))
+
+        // Should not throw
+        manager.logErrorSummary()
+    }
+
+    @Test
+    fun `logErrorSummary does not throw with no errors`() {
+        val sessions = listOf(
+            Session(SessionCredentials("session-1", "cid-1", "cs-1", "rt-1"))
+        )
+        val manager = SessionManager(sessions)
+
+        // Should not throw
+        manager.logErrorSummary()
+    }
 }

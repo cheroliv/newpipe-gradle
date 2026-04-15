@@ -1,8 +1,9 @@
 # 🤖 Agent Context - NewPipe Gradle Ecosystem
 
-**Dernière mise à jour** : 2026-04-14  
+**Dernière mise à jour** : 2026-04-15 (US-6 terminée)  
 **Projets** : `newpipe-gradle`, `newpipe-plugin`, `mp3-organizer`  
-**Stack** : Kotlin 2.3.20, Gradle 9.4.1, LangChain4j 1.12.2, Gemma4:e4b
+**Stack** : Kotlin 2.3.20, Gradle 9.4.1, LangChain4j 1.12.2, Gemma4:e4b  
+**Statut Build** : ✅ BUILD SUCCESSFUL
 
 ---
 
@@ -41,8 +42,12 @@ newpipe-gradle/
 - [x] Configurer OAuth2 Google Cloud Console
 - [x] Implémenter flux d'authentification (AuthSessionTask.kt)
 - [x] Stocker sessions de manière sécurisée
-- [ ] Refresh automatique des tokens expirés (US-3)
-- [ ] Gestion des erreurs d'authentification (US-4)
+- [x] US-1 : Authentification Initiale ✅
+- [x] US-2 : Téléchargement Authentifié ✅
+- [x] US-3 : Refresh automatique des tokens expirés ✅
+- [x] US-4 : Gestion des erreurs d'authentification ✅
+- [x] US-6 : Monitoring de l'état des sessions ✅
+- [x] US-7 : Tests d'intégration ✅
 
 **Commandes** :
 ```bash
@@ -51,6 +56,9 @@ newpipe-gradle/
 
 # Authentifier les sessions
 ./gradlew authSessions
+
+# Voir l'état des sessions
+./gradlew sessionStatus
 
 # Télécharger avec session authentifiée
 ./gradlew downloadMusic --url="VIDEO_ID"
@@ -326,23 +334,218 @@ git update-index --assume-unchanged client_secrets/client_secrets.json
 
 ---
 
-## 📝 Checklist Session OpenCode
+## 📋 BACKLOG - Tâches Prioritaires (Sprint 1)
 
-### Avant de Commencer
+**Progression** : 2/8 US (25%) | 8/37 points (22%)
+
+### 🔴 À TRAITER MAINTENANT - Sprint 1 (2026-04-14 → 2026-04-21)
+
+**Objectif** : Rendre l'existant fiable et testable
+
+#### US-4 : Gestion des Erreurs d'Authentification (3 points)
+**Priorité** : 🟠 Moyenne | **Statut** : ⏳ À FAIRE
+
+**Fichiers à créer** :
+- `newpipe-plugin/newpipe/src/main/kotlin/com/cheroliv/newpipe/AuthErrorHandler.kt`
+
+**Critères d'acceptation** :
+- Mapper les codes erreur OAuth2 → messages utilisateur en français
+- Gérer : token révoqué, token expiré, secret invalide, quota dépassé, compte suspendu
+- Logs structurés avec emoji pour lisibilité
+- Rapport de fin de téléchargement avec état des sessions
+
+**Scénarios** :
+```gherkin
+Scenario: Token révoqué → Message "Token révoqué par l'utilisateur"
+Scenario: Multiple sessions avec erreurs → Seules sessions valides utilisées
+Scenario: Toutes sessions invalides → Fallback anonyme + message clair
+```
+
+#### US-7 : Tests d'Intégration avec Vrais Comptes (5 points)
+**Priorité** : 🟠 Moyenne | **Statut** : ⏳ À FAIRE
+
+**Fichiers à créer** :
+- `newpipe-plugin/newpipe/src/functionalTest/kotlin/com/cheroliv/newpipe/YouTubeAuthIntegrationTest.kt`
+
+**Critères d'acceptation** :
+- Tests taggués `@Tag("real-youtube")` pour éviter exécution CI par défaut
+- Variables d'environnement : `TEST_YOUTUBE_CLIENT_ID`, `TEST_YOUTUBE_CLIENT_SECRET`, `TEST_YOUTUBE_REFRESH_TOKEN`
+- 3 tests minimum : download member-only video, refresh expired token, fallback anonymous
+
+**Commande** :
+```bash
+./gradlew test --tests "*YouTubeAuthIntegrationTest*" --include-tags "real-youtube"
+```
+
+---
+
+### 🟡 BACKLOG COMPLÉMENTAIRE (Sprints 2-3)
+
+**Backlog complet** : `BACKLOG_BACKUP.md` (37 points total, 29 points restants)
+
+#### Sprint 2 : Amélioration UX (8 points)
+- US-3 : Refresh Automatique Tokens (5 points)
+- US-6 : Monitoring Sessions (3 points)
+
+#### Sprint 3 : Fonctionnalités Avancées (13 points)
+- US-5 : Vidéos 18+ (8 points)
+- US-8 : Playlists Privées (5 points)
+
+---
+
+## 📝 Procédure de Session OpenCode
+
+### ⚠️ RÈGLE D'OR : GIT INTERDICTIONS
+
+**OpenCode NE DOIT JAMAIS** :
+- ❌ `git commit` - Interdit
+- ❌ `git push` - Interdit
+- ❌ `git rollback` - Interdit
+- ❌ `git revert` - Interdit
+
+**Seul l'utilisateur peut** gérer Git manuellement après validation.
+
+---
+
+### Avant de Commencer - PROCÉDURE OBLIGATOIRE
+
+**⚠️ PREMIÈRE ACTION OBLIGATOIRE** :
+```bash
+# LIRE CE FICHIER EN PREMIER - Contient le contexte de la session
+cat PROMPT_REPRISE.md
+```
+
+**Ce fichier contient** :
+- ✅ US précédente terminée (statut, fichiers créés/modifiés)
+- ✅ État du code (build, tests, couverture)
+- ✅ Prochaines US recommandées avec priorités
+- ✅ Commandes utiles pour démarrer
+
+**Emplacement** : `PROMPT_REPRISE.md` à la racine du projet (NEWPIPE-GRADLE/)
+
+**Puis** :
 - [ ] Vérifier Ollama : `ollama list | grep gemma4`
 - [ ] Vérifier secrets OAuth : `ls client_secrets/`
 - [ ] Pull le modèle si besoin : `ollama pull gemma4:e4b-it-q4_K_M`
+- [ ] Consulter `BACKLOG.md` pour vue d'ensemble des US
 
 ### Pendant la Session
 - [ ] Noter les commandes exécutées
 - [ ] Capturer les erreurs importantes
 - [ ] Mettre à jour la documentation
-- [ ] Commiter avec message conventionnel
+- [ ] Mettre à jour `BACKLOG.md` (statut US, points, progression)
 
-### Après la Session
-- [ ] Tester manuellement les nouvelles tâches
-- [ ] Vérifier coverage tests
-- [ ] Push vers remote
+### Après la Session - PROCÉDURE DE CLÔTURE
+
+**1. Créer le prompt d'archive** :
+```bash
+# Nomenclature : PROMPT_REPRISE_YYYY-MM-DD_USX-Titre.md
+cp .prompts/PROMPT_REPRISE_COURANT.md \
+   .prompts/PROMPT_REPRISE_$(date +%Y-%m-%d)_US${US_NUM}-$(echo $US_TITLE | tr ' ' '-').md
+```
+
+**2. Ajouter les méta-données YAML** (en tête du fichier) :
+```yaml
+---
+date: YYYY-MM-DD
+us: US-X
+title: Titre de l'US
+status: completed|in_progress|cancelled
+next_us: US-Y, US-Z
+---
+```
+
+**3. Écrire le NOUVEAU prompt de reprise** (PROMPT_REPRISE.md à la racine) :
+- **D'abord, archiver le prompt actuel** dans `.prompts/` suivant la nomenclature :
+  ```bash
+  cp PROMPT_REPRISE.md .prompts/PROMPT_REPRISE_$(date +%Y-%m-%d)_US${US_NUM}-$(echo $US_TITLE | tr ' ' '-').md
+  ```
+- **Puis, écrire un NOUVEAU fichier `PROMPT_REPRISE.md`** avec :
+  - La prochaine US à traiter en priorité (ou US recommandée)
+  - Contexte : fichiers créés/modifiés, tests, build, commandes utiles
+  - Ce fichier servira de point de départ pour la session suivante
+
+**4. Mettre à jour la documentation** :
+- `BACKLOG.md` : Statut US, points, progression
+- `AGENT.md` : Dernière mise à jour en bas de page
+
+**5. Récapitulatif pour l'utilisateur** :
+- Fichiers modifiés
+- Tests créés/passés
+- Backlog mis à jour
+- Prochaines options (US recommandée en priorité)
+
+---
+
+### 📁 Structure des Fichiers de Reprise
+
+```
+newpipe-gradle/
+├── 📄 PROMPT_REPRISE.md                   # 🎯 FICHIER DE REPRISE (racine)
+└── .prompts/
+    ├── PROMPT_REPRISE_2026-04-15_US4-Completion.md
+    ├── PROMPT_REPRISE_2026-04-15_US7-Tests-Integration.md
+    └── ...                                # Archives historiques
+```
+
+**Différence claire** :
+- `PROMPT_REPRISE.md` (racine) = Fichier de travail **ACTUEL** pour reprendre
+- `.prompts/PROMPT_REPRISE_YYYY-MM-DD_USX-*.md` = **ARCHIVES** historiques
+
+---
+
+**Workflow de Session** :
+
+**1. DÉBUT DE SESSION** - Reprendre le contexte
+```bash
+# OpenCode DOIT lire ce fichier en premier
+cat PROMPT_REPRISE.md
+```
+Ce fichier contient :
+- ✅ US précédente terminée
+- ✅ État du code (build, tests)
+- ✅ Prochaines US recommandées
+- ✅ Commandes utiles
+
+**2. PENDANT LA SESSION** - Travailler sur l'US
+- Lire le backlog : `BACKLOG.md`
+- Consulter la doc spécialisée si besoin
+- Mettre à jour la documentation au fur et à mesure
+
+**3. FIN DE SESSION** - Archiver et préparer la suivante
+
+**Étape 3a : Archiver le prompt actuel**
+```bash
+# Nomenclature : PROMPT_REPRISE_YYYY-MM-DD_USX-Titre.md
+cp PROMPT_REPRISE.md \
+   .prompts/PROMPT_REPRISE_$(date +%Y-%m-%d)_US${US_NUM}-$(echo $US_TITLE | tr ' ' '-').md
+
+# Exemple : .prompts/PROMPT_REPRISE_2026-04-15_US7-Tests-Integration.md
+```
+
+**Étape 3b : Ajouter les méta-données YAML** (en tête du fichier archivé)
+```yaml
+---
+date: YYYY-MM-DD
+us: US-X
+title: Titre de l'US
+status: completed|in_progress|cancelled
+next_us: US-Y, US-Z
+---
+```
+
+**Étape 3c : Mettre à jour PROMPT_REPRISE.md**
+- Mettre à jour avec le contexte de la NOUVELLE session
+- Indiquer les prochaines US à traiter
+- Ce fichier servira de point de départ pour la session suivante
+
+**Étape 3d : Mettre à jour la documentation**
+- `BACKLOG.md` : Statut US, points, progression
+- `AGENT.md` : Dernière mise à jour en bas de page
+
+**Règle d'or** : 
+- `PROMPT_REPRISE.md` = **TOUJOURS** le fichier de reprise (à la racine)
+- `.prompts/PROMPT_REPRISE_*.md` = **ARCHIVES** historiques (backup)
 
 ---
 
@@ -358,5 +561,5 @@ Quand tu hésites, consulte la documentation spécialisée :
 
 ---
 
-**Dernière mise à jour** : 2026-04-14  
+**Dernière mise à jour** : 2026-04-15 (Procédure de session + archive prompts)  
 **Maintenu par** : OpenCode Agent + Cheroliv

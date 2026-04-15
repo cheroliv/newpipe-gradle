@@ -18,6 +18,9 @@ class DownloaderPlugin : Plugin<Project> {
             NEWPIPE_GROUP,
             NewpipeExtension::class.java
         )
+        
+        NewpipeManager.configure(project)
+        
         project.afterEvaluate {
             project
                 .layout
@@ -28,17 +31,14 @@ class DownloaderPlugin : Plugin<Project> {
                     if (!exists() || isDirectory)
                         throw Exception(CONFIG_PATH_EXCEPTION_MESSAGE)
                 }
-            project.registerDownloadTask(
-                newpipeExtension,
-                yamlMapper.readValue(
-                    project
-                        .layout
-                        .projectDirectory
-                        .asFile
-                        .resolve(newpipeExtension.configPath.get())
-                )
-
+            val config: Selection = yamlMapper.readValue(
+                project
+                    .layout
+                    .projectDirectory
+                    .asFile
+                    .resolve(newpipeExtension.configPath.get())
             )
+            project.registerDownloadTask(newpipeExtension, config)
         }
     }
 }

@@ -83,6 +83,10 @@ val functionalTestTask = tasks.register<Test>("functionalTest") {
 
 tasks.check { dependsOn(functionalTestTask) }
 
+tasks.test {
+    useJUnitPlatform()
+}
+
 publishing {
     publications {
         create<MavenPublication>("maven") {

@@ -1,0 +1,19 @@
+# Configuration pour les tests d'intégration YouTubeAuthIntegrationTest
+# 
+# Ce fichier est un exemple pour les tests avec le tag @Tag("real-youtube")
+# 
+# Utilisation :
+# 1. Copier ce fichier vers newpipe-gradle/sessions.yml
+# 2. Remplacer les valeurs XXX par vos credentials de test
+# 3. Lancer : ./gradlew functionalTest --tests "*YouTubeAuthIntegrationTest*" --include-tags "real-youtube"
+#
+# Variables d'environnement requises :
+# - TEST_YOUTUBE_CLIENT_ID
+# - TEST_YOUTUBE_CLIENT_SECRET  
+# - TEST_YOUTUBE_REFRESH_TOKEN
+
+sessions:
+  - id: "test-account"
+    clientId: "XXX_CLIENT_ID_XXX"
+    clientSecret: "XXX_CLIENT_SECRET_XXX"
+    refreshToken: "XXX_REFRESH_TOKEN_XXX"

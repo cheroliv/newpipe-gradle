@@ -5,10 +5,11 @@ import kotlinx.coroutines.withContext
 import org.jaudiotagger.audio.AudioFileIO
 import org.jaudiotagger.tag.FieldKey
 import org.jaudiotagger.tag.images.ArtworkFactory
-import org.slf4j.LoggerFactory
+import org.slf4j.LoggerFactory.getLogger
 import java.io.File
 import java.net.URI
 import java.time.Year
+import kotlin.math.abs
 
 /**
  * Real implementation of [AudioConverter].
@@ -30,9 +31,8 @@ class Mp3Converter(
     private val forceDocker: Boolean = false
 ) : AudioConverter {
 
-    private val logger = LoggerFactory.getLogger(Mp3Converter::class.java)
+    private val logger = getLogger(Mp3Converter::class.java)
 
-    // Resolved once — avoids repeated process checks on every track
     private val strategy: FfmpegStrategy = resolveStrategy()
 
     private enum class FfmpegStrategy { LOCAL, DOCKER, NONE }
@@ -56,27 +56,52 @@ class Mp3Converter(
     // AudioConverter implementation
     // ------------------------------------------------------------------
 
+    /**
+     * Returns true only if the file exists, tags match, duration matches,
+     * AND the encoded bitrate is not meaningfully below the best stream available.
+     *
+     * A "meaningful" gap is defined as the existing file being more than
+     * [BITRATE_UPGRADE_THRESHOLD_KBPS] kbps below the best available stream.
+     * This avoids re-downloading when YouTube reports e.g. 321 kbps and the
+     * encoded file measures 318 kbps after FFmpeg re-encoding.
+     */
     override fun alreadyDownloaded(
         mp3File: File,
         title: String,
         artist: String,
         youtubeDurationSeconds: Long,
-        toleranceSeconds: Long
+        toleranceSeconds: Long,
+        bestAvailableBitrateKbps: Int
     ): Boolean {
         if (!mp3File.exists()) return false
         return try {
             val audioFile = AudioFileIO.read(mp3File)
             val tag = audioFile.tag ?: return false
-            val existingTitle  = tag.getFirst(FieldKey.TITLE)
-            val existingArtist = tag.getFirst(FieldKey.ARTIST)
 
-            // Duration check via audio header
+            val existingTitle    = tag.getFirst(FieldKey.TITLE)
+            val existingArtist   = tag.getFirst(FieldKey.ARTIST)
             val existingDuration = audioFile.audioHeader.trackLength.toLong()
-            val durationMatch = Math.abs(existingDuration - youtubeDurationSeconds) <= toleranceSeconds
+            val existingBitrate = try { audioFile.audioHeader.bitRateAsNumber.toString().trim().toIntOrNull() ?: 0 } catch (_: Exception) { 0 }
 
-            val match = existingTitle == title && existingArtist == artist && durationMatch
-            if (match) logger.info("⏭ Skipping already downloaded track: ${mp3File.name}")
-            match
+            val durationMatch = abs(existingDuration - youtubeDurationSeconds) <= toleranceSeconds
+            val tagsMatch     = existingTitle == title && existingArtist == artist
+
+            if (!tagsMatch || !durationMatch) return false
+
+            // Quality upgrade check — only when the caller provides a meaningful bitrate
+            if (bestAvailableBitrateKbps > 0 && existingBitrate > 0) {
+                val gap = bestAvailableBitrateKbps - existingBitrate
+                if (gap > BITRATE_UPGRADE_THRESHOLD_KBPS) {
+                    logger.info(
+                        "↑ Quality upgrade available for ${mp3File.name}: " +
+                                "existing=${existingBitrate}k, available=${bestAvailableBitrateKbps}k — will re-download"
+                    )
+                    return false
+                }
+            }
+
+            logger.info("⏭ Skipping already downloaded track: ${mp3File.name}")
+            true
         } catch (e: Exception) {
             logger.warn("Could not read tags from ${mp3File.name}: ${e.message}")
             false
@@ -93,8 +118,8 @@ class Mp3Converter(
             FfmpegStrategy.LOCAL  -> convertLocal(inputFile, outputFile, bitrate)
             FfmpegStrategy.DOCKER -> {
                 convertDocker(inputFile, outputFile, bitrate)
-                // Garantir que le fichier est accessible en écriture par le process courant
-                // même si le conteneur a ignoré --user
+                // Guarantee the file is writable by the current process
+                // even if the container ignored --user
                 if (outputFile.exists()) outputFile.setWritable(true, false)
             }
             FfmpegStrategy.NONE   -> throw ConversionException(
@@ -108,6 +133,15 @@ class Mp3Converter(
         outputFile
     }
 
+    /**
+     * Writes ID3 tags to [mp3File].
+     *
+     * Strategy:
+     * 1. Full pass — title, artist, album, year, cover art.
+     * 2. If the full pass throws, attempt a minimal fallback with only [title]
+     *    and [artist] — always available from [VideoMetadata] / YAML.
+     * 3. If the fallback also throws, log warn and return the file as-is.
+     */
     override suspend fun addMetadata(
         mp3File: File,
         title: String?,
@@ -116,33 +150,75 @@ class Mp3Converter(
         thumbnailUrl: String?
     ): File = withContext(Dispatchers.IO) {
         try {
-            val audioFile = AudioFileIO.read(mp3File)
-            val tag = audioFile.tagOrCreateAndSetDefault
-
-            title?.let  { tag.setField(FieldKey.TITLE,  it) }
-            artist?.let { tag.setField(FieldKey.ARTIST, it) }
-            album?.let  { tag.setField(FieldKey.ALBUM,  it) }
-            tag.setField(FieldKey.YEAR, Year.now().toString())
-
-            thumbnailUrl?.let { url ->
-                try {
-                    val imageData = URI(url).toURL().openStream().readBytes()
-                    val tmpFile = File.createTempFile("thumbnail", ".jpg")
-                        .apply { writeBytes(imageData); deleteOnExit() }
-                    tag.setField(ArtworkFactory.createArtworkFromFile(tmpFile))
-                    logger.info("Cover art added")
-                } catch (e: Exception) {
-                    logger.warn("Could not add cover art: ${e.message}")
-                }
-            }
-
-            audioFile.commit()
+            writeFullMetadata(mp3File, title, artist, album, thumbnailUrl)
             logger.info("Metadata written: $title — $artist")
-        } catch (e: Exception) {
-            logger.error("Failed to write metadata: ${e.message}", e)
-            // Non-fatal — return the file as-is
+        } catch (fullPassEx: Exception) {
+            logger.warn(
+                "Full metadata pass failed for ${mp3File.name}: ${fullPassEx.message} — " +
+                        "attempting minimal fallback (title + artist only)"
+            )
+            try {
+                writeMinimalMetadata(mp3File, title, artist)
+                logger.info("Minimal metadata written (fallback): $title — $artist")
+            } catch (fallbackEx: Exception) {
+                logger.warn(
+                    "Minimal metadata fallback also failed for ${mp3File.name}: " +
+                            "${fallbackEx.message} — file will have no tags"
+                )
+            }
         }
         mp3File
+    }
+
+    // ------------------------------------------------------------------
+    // Metadata helpers
+    // ------------------------------------------------------------------
+
+    /**
+     * Full metadata pass: title, artist, album, year, and optional cover art.
+     * Throws on any error — the caller handles fallback.
+     */
+    private fun writeFullMetadata(
+        mp3File: File,
+        title: String?,
+        artist: String?,
+        album: String?,
+        thumbnailUrl: String?
+    ) {
+        val audioFile = AudioFileIO.read(mp3File)
+        val tag = audioFile.tagOrCreateAndSetDefault
+
+        title?.let  { tag.setField(FieldKey.TITLE,  it) }
+        artist?.let { tag.setField(FieldKey.ARTIST, it) }
+        album?.let  { tag.setField(FieldKey.ALBUM,  it) }
+        tag.setField(FieldKey.YEAR, Year.now().toString())
+
+        thumbnailUrl?.let { url ->
+            try {
+                val imageData = URI(url).toURL().openStream().readBytes()
+                val tmpFile = File.createTempFile("thumbnail", ".jpg")
+                    .apply { writeBytes(imageData); deleteOnExit() }
+                tag.setField(ArtworkFactory.createArtworkFromFile(tmpFile))
+                logger.info("Cover art added")
+            } catch (e: Exception) {
+                // Cover art is non-fatal — commit text tags anyway
+                logger.warn("Could not add cover art: ${e.message}")
+            }
+        }
+
+        audioFile.commit()
+    }
+
+    /**
+     * Minimal fallback pass: only [title] and [artist].
+     * Throws on any error so the caller can warn and continue.
+     */
+    private fun writeMinimalMetadata(mp3File: File, title: String?, artist: String?) {
+        val audioFile = AudioFileIO.read(mp3File)
+        val tag = audioFile.tagOrCreateAndSetDefault
+        title?.let  { tag.setField(FieldKey.TITLE,  it) }
+        artist?.let { tag.setField(FieldKey.ARTIST, it) }
+        audioFile.commit()
     }
 
     // ------------------------------------------------------------------
@@ -171,6 +247,7 @@ class Mp3Converter(
      * Command shape:
      * ```
      * docker run --rm
+     *   --user <uid>:<gid>
      *   -v <workDir>:/data
      *   <dockerImage>
      *   -i /data/<inputFileName>
@@ -190,8 +267,6 @@ class Mp3Converter(
         val inputInContainer  = "/data/${inputFile.name}"
         val outputInContainer = "/data/${outputFile.name}"
 
-        // Récupérer l'UID et GID du processus courant pour que le fichier
-        // créé par le conteneur appartienne au bon utilisateur
         val uid = ProcessBuilder("id", "-u")
             .redirectErrorStream(true).start()
             .inputStream.bufferedReader().readText().trim()
@@ -201,7 +276,7 @@ class Mp3Converter(
 
         val command = listOf(
             "docker", "run", "--rm",
-            "--user", "$uid:$gid",          // ← le conteneur écrit avec ton UID/GID
+            "--user", "$uid:$gid",
             "-v", "$workDir:/data"
         ) + listOf(dockerImage) + buildFfmpegArgs(
             inputPath  = inputInContainer,
@@ -234,7 +309,7 @@ class Mp3Converter(
     private fun runProcess(command: List<String>, label: String) {
         logger.debug("Running: ${command.joinToString(" ")}")
         val process = ProcessBuilder(command)
-            .redirectErrorStream(true)   // FFmpeg writes to stderr — merge into stdout
+            .redirectErrorStream(true)
             .start()
 
         val output = process.inputStream.bufferedReader().readText()
@@ -268,6 +343,18 @@ class Mp3Converter(
             inputFile.delete()
             logger.debug("Temp file deleted: ${inputFile.name}")
         }
+    }
+
+    companion object {
+        /**
+         * Minimum gap (kbps) between the available stream bitrate and the
+         * existing file's bitrate before a quality upgrade re-download is triggered.
+         *
+         * Avoids re-downloading when FFmpeg re-encoding produces e.g. 317 kbps
+         * from a 320 kbps stream — that's normal lossy encoder variance, not
+         * a meaningful quality difference.
+         */
+        const val BITRATE_UPGRADE_THRESHOLD_KBPS = 32
     }
 }
 

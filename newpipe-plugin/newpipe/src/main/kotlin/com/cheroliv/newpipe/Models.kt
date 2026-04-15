@@ -19,17 +19,13 @@ data class Selection(
  * Serialised to/from sessions.yml — only clientId, clientSecret
  * and refreshToken are persisted. Everything else lives in memory.
  */
+@com.fasterxml.jackson.annotation.JsonIgnoreProperties(ignoreUnknown = true)
 data class SessionCredentials(
     val id: String,
     val clientId: String,
     val clientSecret: String,
     var refreshToken: String = ""
-) {
-    fun toSession(): Session? {
-        if (refreshToken.isBlank()) return null
-        return Session(this)
-    }
-}
+)
 
 /**
  * YAML root — maps directly to sessions.yml.
