@@ -1,182 +1,121 @@
 ---
 date: 2026-04-15
-us: US-5
-title: Vidéos 18+ avec Vérification d'Âge
-status: in_progress
-next_us: US-8
+us: US-8
+title: Support des Playlists Privées
+status: completed
+previous_us: US-7
 ---
 
-# Prompt de Reprise - Session 2026-04-15 (Démarrage US-5)
+# ✅ US-8 TERMINÉE - Support des Playlists Privées
 
-## ✅ US-6 TERMINÉE - Monitoring de l'État des Sessions
+## 📋 PROCÉDURE DE REPRISE POUR L'AGENT
 
-**Fichiers créés** :
-- `SessionMonitor.kt` : Tracking des sessions en mémoire
-- `SessionStatusTask.kt` : Tâche Gradle avec affichage tableau
+**IMPORTANT** : À chaque début de session, l'agent DOIT suivre cette procédure :
 
-**Fichiers modifiés** :
-- `NewpipeManager.kt` : Ajout de `sessionStatus` dans `configure()`
-- `Models.kt` : Ajout de `@JsonIgnoreProperties` sur `SessionCredentials`
-- `DownloaderPlugin.kt` : Appel de `NewpipeManager.configure()`
+1. **Archiver le prompt actuel** :
+   ```bash
+   cp PROMPT_REPRISE.md .prompts/PROMPT_REPRISE_YYYY-MM-DD_US<numéro>-<titre>.md
+   ```
 
-**Commande validée** :
-```bash
-./gradlew sessionStatus
-```
+2. **Lire le nouveau prompt de reprise** :
+   ```bash
+   # Le fichier PROMPT_REPRISE.md dans le dossier courant est le prompt ACTIF
+   ```
 
-**Backlog** : 59% complété (22/37 points)
+3. **Commencer l'US indiquée dans le BACKLOG.md**
+
+**Règle** : Le fichier `PROMPT_REPRISE.md` à la racine est TOUJOURS le prompt actif.
+Les fichiers dans `.prompts/` sont les archives des sessions précédentes.
 
 ---
 
-## 🎯 US-5 : Vidéos 18+ avec Vérification d'Âge (À TRAITER)
+## ✅ US-8 : Support des Playlists Privées - IMPLÉMENTATION COMPLÈTE
 
-**Priorité** : 🟡 Basse  
-**Points** : 8  
-**Statut** : ⏳ À FAIRE
+### Fichiers créés
+- `PrivatePlaylistException.kt` : Exception avec 6 raisons
+  - `AUTHENTICATION_REQUIRED` : Playlist privée sans session
+  - `WRONG_ACCOUNT` : Session actuelle ne peut pas accéder
+  - `PRIVATE_ACCESSIBLE` : Playlist privée accessible
+  - `NOT_PRIVATE` : Playlist publique
+  - `ACCESS_FORBIDDEN` : Erreur 403
+  - `SIGN_IN_REQUIRED` : Session avec token invalide
 
-**Objectif** : Support des vidéos avec restriction d'âge
+- `PrivatePlaylistHandler.kt` : Gestion des erreurs playlists privées
+  - Détection des erreurs 403 et "private playlist"
+  - Logique de décision basée sur la session
+  - Logs structurés avec emoji
 
-### Contexte
+- `PrivatePlaylistHandlerTest.kt` : 21 tests unitaires
+  - Détection d'erreurs
+  - Gestion avec/sans session
+  - Résultats factory methods
 
-YouTube bloque certaines vidéos pour les utilisateurs non authentifiés ou mineurs. Avec un compte Google majeur authentifié, ces vidéos deviennent accessibles.
+### Fichiers modifiés
 
-**Problèmes à gérer** :
-1. Détection des vidéos age-restricted
-2. Vérification que le compte est majeur (date de naissance >= 18 ans)
-3. Gestion des erreurs spécifiques (age-gate, contenu sensible)
-4. Messages clairs pour l'utilisateur
-
-### Fichiers à créer
-
-```
-newpipe-plugin/newpipe/src/main/kotlin/com/cheroliv/newpipe/
-├── AgeVerificationHandler.kt    # Gestion des erreurs age-restricted
-└── AgeRestrictedVideoException.kt # Exception dédiée
-```
-
-### Critères d'acceptation
-
-```bash
-# 1. Détection automatique
-./gradlew downloadMusic --url="https://youtube.com/watch?v=age-restricted"
-
-# Sortie attendue :
-# ✓ Vidéo age-restricted détectée
-# ✓ Session authentifiée utilisée
-# ✓ Téléchargement réussi
-
-# 2. Compte mineur ou non authentifié
-# ⚠️  Cette vidéo nécessite une vérification d'âge
-#    → Authentifiez un compte Google majeur avec ./gradlew authSessions
-#    → Ou utilisez le mode anonyme si disponible
-
-# 3. Erreur age-gate non contournable
-# ❌  Impossible d'accéder à cette vidéo (restriction géographique + âge)
-#    → Essayez avec un autre compte ou un VPN
-```
-
-### Scénarios de test
-
-```gherkin
-Scenario: Vidéo 18+ avec compte authentifié majeur
-  Given une session avec un compte Google majeur
-  And une vidéo age-restricted sur YouTube
-  When je lance ./gradlew downloadMusic --url="VIDEO_ID"
-  Then la vidéo est téléchargée avec succès
-  And aucun message d'erreur n'est affiché
-
-Scenario: Vidéo 18+ sans authentification
-  Given aucune session authentifiée
-  And une vidéo age-restricted sur YouTube
-  When je lance ./gradlew downloadMusic --url="VIDEO_ID"
-  Then un message indique "Vérification d'âge requise"
-  And un lien vers ./gradlew authSessions est affiché
-
-Scenario: Vidéo 18+ avec compte mineur
-  Given une session avec un compte Google mineur (< 18 ans)
-  And une vidéo age-restricted sur YouTube
-  When je lance ./gradlew downloadMusic --url="VIDEO_ID"
-  Then un message indique "Compte mineur - Accès refusé"
-  And la session est marquée inappropriée pour ce contenu
-```
-
-### Tâches techniques
-
-- [ ] Analyser les erreurs NewPipeExtractor pour age-restricted
-- [ ] Créer `AgeVerificationHandler.kt` avec détection des erreurs
-- [ ] Ajouter des tests unitaires pour chaque scénario
-- [ ] Modifier `DownloadMusicTask.kt` pour intégrer le handler
-- [ ] Tests d'intégration avec vraies vidéos 18+
-
-### Implémentation suggérée
-
+**Models.kt** :
 ```kotlin
-// AgeVerificationHandler.kt
-class AgeVerificationHandler {
-    
-    fun handleAgeRestrictedError(
-        videoUrl: String, 
-        session: Session?, 
-        error: Throwable
-    ): AgeVerificationResult {
-        return when {
-            error.isAgeRestricted() && session == null -> 
-                AgeVerificationResult.UNAUTHENTICATED
-            
-            error.isAgeRestricted() && !session.isAccountAdult() -> 
-                AgeVerificationResult.MINOR_ACCOUNT
-            
-            error.isAgeRestricted() -> 
-                AgeVerificationResult.SUCCESS
-            
-            else -> 
-                AgeVerificationResult.NOT_AGE_RESTRICTED
-        }
-    }
-    
-    fun logAgeVerificationResult(result: AgeVerificationResult, videoUrl: String) {
-        // Logs structurés avec emoji
-    }
-}
+data class PlaylistEntry(
+    val url: String,
+    val session: String? = null  // Session explicite optionnelle
+)
 ```
 
-### Ressources
+**NewpipeManager.kt** :
+- `registerDownloadTask` utilise maintenant `playlistEntries` au lieu de `playlistUrls`
 
-- **Vidéos test 18+** : Identifier des URLs de test valides
-- **NewPipeExtractor** : Voir comment gère age-restricted
-- **OAuth2 Scope** : `youtube.readonly` suffit-il pour 18+ ?
+**DownloadMusicTask.kt** :
+- Ajout de `DownloadEntry` avec `sessionHint`
+- Support des playlists avec session explicite
+- Changement de session dynamique pour les playlists privées
+- Gestion d'erreurs intégrée avec `PrivatePlaylistHandler`
 
----
+**SessionManager.kt** :
+- Ajout de `val sessions: List<Session>` pour accès externe
 
-## 📝 État du Code
+### Configuration YAML
 
-**Branch** : `main`  
+**Playlist publique (sans authentification)** :
+```yaml
+artistes:
+  - name: "Artiste Public"
+    playlists:
+      - url: "https://youtube.com/playlist?list=PUBLIC_ID"
+```
+
+**Playlist privée avec session explicite** :
+```yaml
+artistes:
+  - name: "Mon Compte"
+    playlists:
+      - url: "https://youtube.com/playlist?list=PRIVATE_ID"
+        session: "compte-principal"
+```
+
+**Sessions requises (sessions.yml)** :
+```yaml
+sessions:
+  - id: "compte-principal"
+    clientId: "..."
+    clientSecret: "..."
+    refreshToken: "..."
+```
+
+### Scénarios de test couverts
+
+1. ✅ Playlist privée sans session → Message "authentication required"
+2. ✅ Playlist privée avec mauvaise session → Message "wrong account"
+3. ✅ Playlist privée avec bonne session → Téléchargement réussi
+4. ✅ Playlist publique sans session → Mode anonyme
+5. ✅ Playlist publique avec session → Mode authentifié
+
+### Build et Tests
+
 **Build** : ✅ BUILD SUCCESSFUL  
-**Tests** : ✅ 27 tests unitaires + 3 tests d'intégration
+**Tests** : 48+ tests unitaires  
+**Backlog** : 32/42 points (76%)  
+**US-8** : 5/5 points (100%) ✅
 
-**Fichiers non commités** :
-- `SessionMonitor.kt` (nouveau)
-- `SessionStatusTask.kt` (nouveau)
-- `BACKLOG.md`, `AGENT.md`, `PROMPT_REPRISE.md` (modifiés)
-
----
-
-## 🚀 Commandes Utiles
-
-```bash
-# Build + Tests
-./gradlew -p newpipe-plugin clean build test
-
-# Voir l'état des sessions
-./gradlew sessionStatus
-
-# Authentifier un compte (prérequis pour US-5)
-./gradlew buildSessions
-./gradlew authSessions
-
-# Tester avec une vidéo 18+ (après implémentation)
-./gradlew downloadMusic --url="VIDEO_ID_18+"
-```
+**Dernier commit** : `feat(US-8): Add private playlist support with multi-session`
 
 ---
 
@@ -188,14 +127,14 @@ class AgeVerificationHandler {
 | US-2 | Téléchargement Authentifié | ✅ FAIT | 5 |
 | US-3 | Refresh Automatique Tokens | ✅ FAIT | 5 |
 | US-4 | Gestion Erreurs Auth | ✅ FAIT | 3 |
-| US-5 | Vidéos 18+ | ⏳ **EN COURS** | 8 |
+| US-5 | Vidéos 18+ | ✅ FAIT | 8 |
 | US-6 | Monitoring Sessions | ✅ FAIT | 3 |
 | US-7 | Tests Intégration | ✅ FAIT | 5 |
-| US-8 | Playlists Privées | ⏳ À FAIRE | 5 |
+| US-8 | Playlists Privées | ✅ FAIT | 5 |
 
-**Total** : 22/37 points (59%)  
+**Total** : 32/42 points (76%)  
 **Sprint 1** : 22/22 points (100%) ✅  
-**Sprint 2** : 0/13 points (0%)
+**Sprint 2** : 10/13 points (77%)
 
 ---
 
@@ -209,9 +148,6 @@ git update-index --assume-unchanged client_secrets/*.json
 
 ---
 
-**Pour commencer US-5** :
-1. Identifier des vidéos 18+ de test sur YouTube
-2. Vérifier que le compte authentifié est majeur
-3. Analyser les erreurs NewPipeExtractor pour age-restricted
-4. Implémenter `AgeVerificationHandler.kt`
-5. Ajouter tests unitaires et d'intégration
+## 🚀 Prochaine US
+
+Consulter `BACKLOG.md` pour la prochaine US à implémenter.

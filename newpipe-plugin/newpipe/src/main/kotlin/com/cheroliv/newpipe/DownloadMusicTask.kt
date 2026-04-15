@@ -35,6 +35,7 @@ open class DownloadMusicTask : DefaultTask() {
 
     private val logger = LoggerFactory.getLogger(DownloadMusicTask::class.java)
     private val ageVerificationHandler = AgeVerificationHandler()
+    private val privatePlaylistHandler = PrivatePlaylistHandler()
 
     companion object {
         const val MOCK_PROPERTY = "newpipe.test.mock"
@@ -52,6 +53,9 @@ open class DownloadMusicTask : DefaultTask() {
 
     @get:Input
     var playlistUrls: List<String> = emptyList()
+
+    @get:Input
+    var playlistEntries: List<Selection.PlaylistEntry> = emptyList()
 
     @get:Input
     var ffmpegDockerImage: String = NewpipeExtension.DEFAULT_FFMPEG_IMAGE
@@ -99,6 +103,16 @@ open class DownloadMusicTask : DefaultTask() {
     // ------------------------------------------------------------------
 
     /**
+     * Represents a download entry with optional session hint.
+     */
+    private data class DownloadEntry(
+        val artistHint: String?,
+        val url: String,
+        val sessionHint: String? = null,
+        val isPlaylist: Boolean = false
+    )
+
+    /**
      * Holds the raw audio temp file ready for conversion.
      *
      * @param previousMp3Backup  When this is a quality upgrade re-download, the
@@ -138,39 +152,67 @@ open class DownloadMusicTask : DefaultTask() {
             return
         }
 
-        val hasWork = tuneEntries.isNotEmpty() || playlistUrls.isNotEmpty()
+        val hasWork = tuneEntries.isNotEmpty() || playlistUrls.isNotEmpty() || playlistEntries.isNotEmpty()
         if (!hasWork) throw GradleException("No tunes or playlists to download. Check your YAML config.")
 
-        val allEntries: List<Pair<String?, String>> = buildList {
+        val allEntries: List<DownloadEntry> = buildList {
             tuneEntries.forEach { entry ->
                 val parts = entry.split("|", limit = 2)
                 if (parts.size == 2) {
-                    add(parts[0] to parts[1])
+                    add(DownloadEntry(artistHint = parts[0], url = parts[1]))
                 }
             }
 
-            if (playlistUrls.isNotEmpty()) {
-                val infoProvider = newInfoProvider()
-                playlistUrls.forEachIndexed { pIndex, playlistUrl ->
-                    logger.info("Fetching playlist [${pIndex + 1}/${playlistUrls.size}]: $playlistUrl")
-                    runCatching {
-                        runBlocking { infoProvider.getPlaylistVideoUrls(playlistUrl) }
-                    }.onSuccess { urls ->
-                        logger.info("  → ${urls.size} video(s) found")
-                        urls.forEach { videoUrl -> add(null to videoUrl) }
-                    }.onFailure { e ->
-                        when {
-                            e.isNotFound()    -> logger.warn("⏭ Playlist not found, skipping: $playlistUrl")
-                            e.isUnavailable() -> logger.warn("⏭ Playlist unavailable, skipping: $playlistUrl — ${e.message}")
-                            else              -> logger.error("Failed to fetch playlist $playlistUrl: ${e.message}")
-                        }
-                    }
+            if (playlistEntries.isNotEmpty()) {
+                playlistEntries.forEach { entry ->
+                    add(DownloadEntry(artistHint = null, url = entry.url, sessionHint = entry.session))
+                }
+            } else if (playlistUrls.isNotEmpty()) {
+                playlistUrls.forEach { url ->
+                    add(DownloadEntry(artistHint = null, url = url))
                 }
             }
         }
 
+        val playlistVideoEntries: List<Pair<String?, String>> = if (allEntries.any { it.isPlaylist }) {
+            val infoProvider = newInfoProvider()
+            val playlistEntries = allEntries.filter { it.isPlaylist }
+            
+            playlistEntries.flatMap { entry ->
+                logger.info("Fetching playlist: ${entry.url}")
+                val session = entry.sessionHint?.let { getSessionById(it, sessionsPath) }
+                    ?: NewpipeManager.getCurrentSession(sessionsPath)
+                
+                runCatching {
+                    runBlocking { 
+                        if (session != null) {
+                            DownloaderImpl.init(SessionManager(listOf(session), TokenRefresher()))
+                        }
+                        infoProvider.getPlaylistVideoUrls(entry.url) 
+                    }
+                }.onSuccess { urls ->
+                    logger.info("  → ${urls.size} video(s) found")
+                }.onFailure { e ->
+                    when {
+                        privatePlaylistHandler.isPrivatePlaylistError(e) -> {
+                            val result = privatePlaylistHandler.handlePrivatePlaylistError(entry.url, session, e)
+                            privatePlaylistHandler.logPrivatePlaylistResult(result, entry.url)
+                        }
+                        e.isNotFound()    -> logger.warn("⏭ Playlist not found, skipping: ${entry.url}")
+                        e.isUnavailable() -> logger.warn("⏭ Playlist unavailable, skipping: ${entry.url} — ${e.message}")
+                        else              -> logger.error("Failed to fetch playlist ${entry.url}: ${e.message}")
+                    }
+                }.getOrNull()?.map { url -> entry.artistHint to url } ?: emptyList()
+            }
+        } else {
+            emptyList()
+        }
+
+        val allEntriesFlat: List<DownloadEntry> = allEntries.filterNot { it.isPlaylist } + 
+            playlistVideoEntries.map { DownloadEntry(artistHint = it.first, url = it.second) }
+
         logger.info("\n" + "=".repeat(60))
-        logger.info("${allEntries.size} track(s) to download (max $MAX_CONCURRENT_DOWNLOADS concurrent)")
+        logger.info("${allEntriesFlat.size} track(s) to download (max $MAX_CONCURRENT_DOWNLOADS concurrent)")
         logger.info("=".repeat(60))
 
         val errors = Collections.synchronizedList(mutableListOf<String>())
@@ -179,14 +221,14 @@ open class DownloadMusicTask : DefaultTask() {
             val semaphore = Semaphore(MAX_CONCURRENT_DOWNLOADS)
             val converter = newAudioConverter()
 
-            allEntries
-                .mapIndexed { index, (artistHint, tuneUrl) ->
-                    val label = "[${index + 1}/${allEntries.size}] ${artistHint ?: tuneUrl}"
+            allEntriesFlat
+                .mapIndexed { index, entry ->
+                    val label = "[${index + 1}/${allEntriesFlat.size}] ${entry.artistHint ?: entry.url}"
                     async(Dispatchers.IO) {
                         semaphore.withPermit {
                             logger.info("\n⬇ Downloading $label")
                             runCatching {
-                                val track = fetchAudio(tuneUrl, artistHint, baseOutputDir, label)
+                                val track = fetchAudio(entry.url, entry.artistHint, baseOutputDir, label)
                                 logger.info("\n🎵 Converting: ${track.label}")
                                 convertTrack(converter, track)
                             }.onFailure { e ->
@@ -200,21 +242,21 @@ open class DownloadMusicTask : DefaultTask() {
                                                 message = e.message ?: "Age-restricted video",
                                                 action = "Authentifiez un compte avec ./gradlew authSessions"
                                             ),
-                                            tuneUrl
+                                            entry.url
                                         )
                                     }
                                     e.isAgeRestricted() -> {
                                         val session = NewpipeManager.getCurrentSession(sessionsPath)
-                                        val result = ageVerificationHandler.handleAgeRestrictedError(tuneUrl, session, e)
-                                        ageVerificationHandler.logAgeVerificationResult(result, tuneUrl)
+                                        val result = ageVerificationHandler.handleAgeRestrictedError(entry.url, session, e)
+                                        ageVerificationHandler.logAgeVerificationResult(result, entry.url)
                                         if (result.shouldRetryWithAnotherSession) {
-                                            errors += "[$label] $tuneUrl: ${result.message} - ${result.action}"
+                                            errors += "[$label] ${entry.url}: ${result.message} - ${result.action}"
                                         }
                                     }
-                                    e.isNotFound()    -> logger.warn("⏭ Not found, skipping: $tuneUrl")
-                                    e.isUnavailable() -> logger.warn("⏭ Unavailable, skipping: $tuneUrl — ${e.message}")
+                                    e.isNotFound()    -> logger.warn("⏭ Not found, skipping: ${entry.url}")
+                                    e.isUnavailable() -> logger.warn("⏭ Unavailable, skipping: ${entry.url} — ${e.message}")
                                     else -> {
-                                        val msg = "Failed [$label] $tuneUrl: ${e.message}"
+                                        val msg = "Failed [$label] ${entry.url}: ${e.message}"
                                         logger.error(msg)
                                         errors += msg
                                     }
@@ -381,6 +423,11 @@ open class DownloadMusicTask : DefaultTask() {
     // ------------------------------------------------------------------
     // Helpers
     // ------------------------------------------------------------------
+
+    private fun getSessionById(sessionId: String, sessionsPath: String): Session? {
+        val manager = NewpipeManager.buildSessionManager(sessionsPath)
+        return manager.sessions.find { it.id == sessionId }
+    }
 
     private fun formatDuration(seconds: Long): String {
         val minutes = seconds / 60

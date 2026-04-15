@@ -28,7 +28,9 @@ object NewpipeManager {
             this.tuneEntries = config.artistes.flatMap { artist ->
                 artist.tunes.map { tune -> "${artist.name}|$tune" }
             }
-            this.playlistUrls = config.artistes.flatMap { it.playlists }
+            this.playlistEntries = config.artistes.flatMap { artist ->
+                artist.playlists
+            }
         }
     }
 

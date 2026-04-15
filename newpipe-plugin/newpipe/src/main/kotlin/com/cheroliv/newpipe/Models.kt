@@ -10,8 +10,18 @@ data class Selection(
     data class Artist(
         val name: String,
         val tunes: List<String> = emptyList(),
-        val playlists: List<String> = emptyList()
-    )
+        val playlists: List<PlaylistEntry> = emptyList()
+    ) {
+        @Deprecated("Use playlists with PlaylistEntry instead", level = DeprecationLevel.HIDDEN)
+        fun getPlaylistUrls(): List<String> = playlists.map { it.url }
+    }
+    
+    data class PlaylistEntry(
+        val url: String,
+        val session: String? = null
+    ) {
+        constructor(url: String) : this(url, null)
+    }
 }
 
 /**

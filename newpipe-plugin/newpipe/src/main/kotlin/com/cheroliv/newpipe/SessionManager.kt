@@ -29,6 +29,8 @@ class SessionManager(
     private val authErrorHandler = AuthErrorHandler()
 
     private val all: List<Session> = sessions.toList()
+    
+    val sessions: List<Session> get() = all
 
     @Volatile
     private var invalidIds: Set<String> = emptySet()
