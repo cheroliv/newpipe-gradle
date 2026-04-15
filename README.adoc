@@ -1,12 +1,11 @@
-= newpipe-gradle
+= NewPipe Gradle Plugin
 :toc: left
 :toc-title: Contents
 :toclevels: 3
 :icons: font
 :source-highlighter: highlight.js
 :hardbreaks-option:
-:plugin_version: 0.0.4
-:pipe_commit: 4701a17
+:plugin_version: 0.0.5
 
 ++++
 <p align="right">
@@ -20,8 +19,7 @@ image:https://img.shields.io/badge/Kotlin-2.x-7F52FF?logo=kotlin[Kotlin]
 image:https://img.shields.io/badge/Gradle-8.x-02303A?logo=gradle[Gradle]
 image:https://img.shields.io/badge/License-Apache%202.0-blue.svg[License]
 
-A Gradle project that uses the `com.cheroliv.newpipe` plugin to download
-music from YouTube and convert it to MP3 — no Python required.
+A Gradle plugin to download music from YouTube and convert it to MP3 — no Python required.
 
 == Prerequisites
 
@@ -45,27 +43,39 @@ No Python dependency is required.
 https://github.com/TeamNewPipe/NewPipeExtractor[NewPipe Extractor], pure JVM.
 ====
 
-== Project Structure
+== Installation
 
-[source,text]
+=== Option 1: Clone this repository
+
+Ideal for getting started quickly or if you want a ready-to-use setup.
+
+[source,bash]
 ----
-newpipe-gradle/               <-- this repo (consumer project)
-├── build.gradle.kts          <-- applies the plugin, nothing else
-├── settings.gradle.kts       <-- declares JitPack in pluginManagement
-├── musics.yml                <-- your music selection
-├── gradle/
-│   └── libs.versions.toml   <-- version catalog
-└── newpipe-plugin/           <-- plugin source code (sub-project)
+git clone https://github.com/your-org/newpipe-gradle.git
+cd newpipe-gradle
 ----
 
-== Configuration
+The project is already configured with:
 
-=== settings.gradle.kts
+- `build.gradle.kts` — plugin applied and configured
+- `settings.gradle.kts` — plugin repositories declared
+- `musics.yml` — your music selection file
+- `gradle/libs.versions.toml` — version catalog
 
-JitPack must be declared in `pluginManagement` because the plugin depends on
-NewPipe Extractor, which is hosted on JitPack.
+Edit `musics.yml` to add your music, then run:
 
-[source,kotlin]
+[source,bash]
+----
+./gradlew download
+----
+
+=== Option 2: Use the plugin in an existing project
+
+Add the plugin to your existing Gradle project.
+
+==== 1. Configure `settings.gradle.kts`
+
+[source,kotlin,subs="attributes+"]
 ----
 pluginManagement {
     repositories {
@@ -87,19 +97,14 @@ dependencyResolutionManagement {
 plugins {
     id("org.gradle.toolchains.foojay-resolver-convention") version "1.0.0"
 }
-
-rootProject.name = "newpipe-plugin"
-include("newpipe")
 ----
 
-=== build.gradle.kts
-
-Minimal configuration — only `configPath` is required:
+==== 2. Configure `build.gradle.kts`
 
 [source,kotlin,subs="attributes+"]
 ----
 plugins {
-    id("com.cheroliv.newpipe") version ("{plugin_version}")
+    alias(libs.plugins.newpipe)
 }
 
 newpipe {
@@ -107,30 +112,32 @@ newpipe {
 }
 ----
 
-Full configuration with all available options:
+==== 3. Create `gradle/libs.versions.toml`
 
-[source,kotlin,subs="attributes+"]
+[source,toml,subs="attributes+"]
 ----
-plugins {
-    id("com.cheroliv.newpipe") version ("{plugin_version}")
-}
+[versions]
+newpipe = "{plugin_version}"
 
-newpipe {
-    // Required — path to the YAML selection file
-    configPath = file("musics.yml").absolutePath
-
-    // Optional — Docker image used for FFmpeg conversion.
-    // Default: "jrottenberg/ffmpeg:4.4-alpine"
-    // Only used when FFmpeg is not installed locally, OR when forceDocker = true.
-    ffmpegDockerImage = "jrottenberg/ffmpeg:8-scratch"
-
-    // Optional — force Docker even if FFmpeg is installed locally.
-    // Useful for reproducible builds or CI environments. Default: false
-    forceDocker = true
-}
+[plugins]
+newpipe = { id = "com.cheroliv.newpipe", version.ref = "newpipe" }
 ----
 
-==== DSL reference
+==== 4. Create `musics.yml`
+
+[source,yaml]
+----
+artistes:
+  - name: "Daft Punk"
+    tunes:
+      - "https://www.youtube.com/watch?v=5NV6Rdv1a3I"
+    playlists:
+      - "https://www.youtube.com/playlist?list=PLx0sYbCqOb8TBPRdmBHs5Iftvv9TPboYG"
+----
+
+== Configuration
+
+=== DSL reference
 
 [cols="1,2,1,2", options="header"]
 |===
@@ -152,6 +159,18 @@ or when `forceDocker = true`.
 | `false`
 | When `true`, skips the local FFmpeg probe and always uses Docker,
 even if `ffmpeg` is available on the system `PATH`.
+
+| `sessionsPath`
+| `String`
+| `""`
+| Path to `sessions.yml` for OAuth2 authenticated sessions.
+Required for accessing age-restricted or private content.
+
+| `clientSecretsDir`
+| `String`
+| `""`
+| Directory containing OAuth2 client secret JSON files.
+Used by `buildSessions` task.
 |===
 
 === musics.yml
@@ -201,6 +220,26 @@ The artist name comes from the YouTube video uploader tag.
 *YouTube Mix Radio* (`list=RD...`, `list=RDEM...`, `list=RDAMVM...`) +
 These playlists are dynamically generated. The plugin automatically fetches
 the first page (~15 tracks) and stops — no infinite loop.
+====
+
+=== sessions.yml (Optional)
+
+For accessing age-restricted videos, private playlists, or member-only content,
+configure OAuth2 sessions:
+
+[source,yaml]
+----
+sessions:
+  - id: "main"
+    clientId: "YOUR_CLIENT_ID"
+    clientSecret: "YOUR_CLIENT_SECRET"
+    refreshToken: "YOUR_REFRESH_TOKEN"
+----
+
+[WARNING]
+====
+Keep `sessions.yml` secure — it contains sensitive credentials.
+Do not commit it to version control.
 ====
 
 == FFmpeg Strategy
@@ -272,9 +311,6 @@ The `--user` flag ensures the output MP3 is owned by the user running Gradle,
 not by the container's root user. This avoids permission errors when jaudiotagger
 writes the ID3 tags after the conversion.
 
-Both the temp file (`_temp.m4a`) and the output MP3 are placed in the same
-artist directory, so a single volume mount covers both.
-
 == Audio Quality Selection
 
 === Bitrate ladder
@@ -310,9 +346,6 @@ video, following a descending priority ladder:
 The stream format (m4a, webm, opus…) is deliberately ignored during selection:
 FFmpeg handles the conversion to MP3 regardless of the source format.
 
-The selected bitrate is passed directly to FFmpeg (`-b:a <bitrate>k`),
-ensuring the YouTube stream quality is faithfully preserved in the final MP3.
-
 === Automatic quality upgrade
 
 If an MP3 was downloaded in a previous session at a lower quality than what
@@ -346,7 +379,7 @@ the conversion or download fails midway.
 
 [source,bash]
 ----
-./gradlew -i download
+./gradlew download
 ----
 
 MP3s are organised as follows:
@@ -376,6 +409,59 @@ With a custom output folder:
   --url=https://www.youtube.com/watch?v=5NV6Rdv1a3I \
   --output=/home/user/Music
 ----
+
+=== Interactive CLI
+
+The plugin provides an interactive menu-driven interface:
+
+[source,bash]
+----
+./gradlew newpipeInteractive
+----
+
+The interactive CLI offers:
+
+1. *🔐 Configurer les sessions OAuth2* — Generate and authenticate OAuth2 sessions
+2. *📥 Lancer un téléchargement* — Download all playlists or a specific video
+3. *📊 Vérifier l'état des sessions* — Check session authentication status
+4. *📝 Ajouter une playlist* — Add a playlist to musics.yml (manual instructions)
+5. *⚙️  Configuration* — View configuration file locations
+6. *❓ Aide* — Display help information
+7. *🚪 Quitter* — Exit the CLI
+
+=== OAuth2 Session Management
+
+For accessing restricted content, you need to authenticate Google accounts.
+
+==== 1. Generate client secrets
+
+Create `client_secrets/` directory with OAuth2 client secret JSON files from
+https://console.cloud.google.com[Google Cloud Console].
+
+[source,bash]
+----
+./gradlew buildSessions
+----
+
+This builds `sessions.yml` from the JSON files.
+
+==== 2. Authenticate sessions
+
+[source,bash]
+----
+./gradlew authSessions
+----
+
+Follow the device flow instructions to authenticate each account.
+
+==== 3. Check session status
+
+[source,bash]
+----
+./gradlew sessionStatus
+----
+
+Displays the authentication status of all configured sessions.
 
 === List available tasks
 
@@ -473,14 +559,12 @@ newpipe {
 === Downloads are very slow
 
 YouTube throttles unofficial clients. This behaviour is tied to the version
-of NewPipe Extractor in use. To point to the latest `dev` branch commit:
+of NewPipe Extractor in use. Update the version in `gradle/libs.versions.toml`:
 
-[source,toml,subs="attributes+"]
+[source,toml]
 ----
-# gradle/libs.versions.toml
 [versions]
-newpipe-extractor = "{pipe_commit}"  # hash of the latest dev commit
-# https://github.com/TeamNewPipe/NewPipeExtractor/commits/dev
+newpipe = "0.0.5"  # or latest available version
 ----
 
 === FFmpeg not found
@@ -551,3 +635,23 @@ This indicates that the file's ID3 tags do not match the YouTube metadata
 (different title or artist), or that the detected bitrate is significantly
 below the best available stream. Check the file's tags with a tag editor
 (Ex Falso, MusicBrainz Picard) and compare with the exact YouTube video title.
+
+=== Age-restricted video error
+
+If you encounter age-restricted videos, authenticate a Google account:
+
+[source,bash]
+----
+./gradlew authSessions
+----
+
+Then reference the session in `musics.yml`:
+
+[source,yaml]
+----
+artistes:
+  - name: "Artist"
+    playlists:
+      - url: "https://www.youtube.com/playlist?list=..."
+        session: "main"  # references session ID in sessions.yml
+----
