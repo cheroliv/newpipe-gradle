@@ -49,6 +49,11 @@ object NewpipeManager {
 
         project.tasks.register("sessionStatus", SessionStatusTask::class.java) {
             sessionsPath = extension.sessionsPath.get()
+            group = NEWPIPE_GROUP
+        }
+
+        project.tasks.register("newpipeInteractive", InteractiveCliTask::class.java) {
+            group = NEWPIPE_GROUP
         }
 
         project.tasks.register("download", DownloadMusicTask::class.java) {
