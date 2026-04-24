@@ -407,6 +407,25 @@ Scenario: Toutes sessions invalides → Fallback anonyme + message clair
 
 ---
 
+## ⚠️ RÈGLE CRITIQUE : SECRETS ET TOKENS — INTERDICTION DE LOG
+
+**PRINCIPE** : Les tokens API, mots de passe, et identifiants NE DOIVENT JAMAIS apparaître dans la sortie terminal de l'agent. L'utilisateur peut streamer son terminal (Discord, Twitch, etc.). Tout token visible dans le terminal est compromis.
+
+**INTERDICTIONS** :
+- ❌ **NE JAMAIS** passer un token en argument visible d'une commande (ex: `GH_TOKEN=xxx gh run list` affiche le token dans l'historique shell)
+- ❌ **NE JAMAIS** afficher le contenu d'un fichier contenant des tokens (site.yml, .env, credentials, etc.) si le token peut être visible dans la sortie
+- ❌ **NE JAMAIS** utiliser `echo`, `cat`, ou toute commande qui affiche des tokens dans le terminal
+
+**Procédure OBLIGATOIRE pour utiliser des tokens** :
+1. Utiliser `gh auth login --with-token` avec le token via **stdin** (pipe ou redirect), jamais en argument visible
+2. Utiliser des variables d'environnement dans un sous-shell : `(< token gh auth login --with-token)` plutôt que `GH_TOKEN=token gh ...`
+3. Vérifier que `gh auth status` fonctionne après configuration
+4. Ne **jamais** lire puis afficher le contenu d'un fichier de credentials (site.yml, .env, etc.)
+
+**Leçon de la Session 008 (magic_stick)** : L'agent a affiché le contenu de `site.yml` contenant un token GitHub dans le terminal, puis a utilisé `GH_TOKEN=xxx gh run list` qui affiche le token dans l'historique shell. L'utilisateur streamait son terminal sur Discord. Token compromis en 1 seconde.
+
+---
+
 ### Avant de Commencer - PROCÉDURE OBLIGATOIRE
 
 **⚠️ PREMIÈRE ACTION OBLIGATOIRE** :
