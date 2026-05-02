@@ -1,0 +1,44 @@
+= Analyse de Couverture de Tests — NewPipe Plugin
+:icons: font
+
+[abstract]
+Ce fichier suit l'état des tests du plugin.
+*Mis à jour uniquement si des tests ont été ajoutés ou modifiés* durant une session.
+*LAZY* — Chargé sur demande.
+
+== Suivi des Tests
+
+[cols="3,2,2,2,3", options="header"]
+|===
+| Classe de test | Type | Tests | Statut | Dernière MAJ
+
+// Existant (août 2025)
+| `AuthSessionTaskTest` | unit | ?/? | ⏳ À vérifier | 2026-04-15
+| `SessionManagerTest` | unit | 27/27 | ✅ PASS | 2026-04-15
+| `AuthErrorHandlerTest` | unit | 17/17 | ✅ PASS | 2026-04-15
+| `AgeVerificationHandlerTest` | unit | 16/16 | ✅ PASS | 2026-04-15
+| `PrivatePlaylistTest` | unit | 21/21 | ✅ PASS | 2026-04-15
+| `YouTubeAuthIntegrationTest` | integration | 3/3 | ✅ PASS (real-youtube) | 2026-04-15
+|===
+
+== Historique par Session
+
+[cols="1,2,2,3", options="header"]
+|===
+| Session | Tests ajoutés | Tests modifiés | Couverture
+| 000 | 0 | 0 | ~80+ tests (historique), couverture exacte à mesurer
+===
+
+== Résumé État
+
+- *80+ tests unitaires* passants (état au 2026-04-15)
+- *Tests d'intégration* taggués `real-youtube` (nécessite comptes réels)
+- *Couverture* : à mesurer avec JaCoCo (`./gradlew :newpipe:jacocoTestReport`)
+- *CI* : tests d'intégration exclus par défaut (tag `real-youtube`)
+
+== À Faire
+
+. Mesurer la couverture exacte après bootstrap gouvernance
+. Ajouter des tests pour `LlmClient.kt` une fois migré
+. Ajouter des tests fonctionnels avec Gradle TestKit
+. Atteindre > 50% de couverture

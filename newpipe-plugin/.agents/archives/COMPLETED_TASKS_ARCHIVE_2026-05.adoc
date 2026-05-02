@@ -1,0 +1,71 @@
+= COMPLETED_TASKS_ARCHIVE — Mai 2026
+:icons: font
+
+[abstract]
+Tâches terminées archivées par mois.
+*LAZY* — Consulté sur demande.
+
+== Session 001
+
+*Date* : 2026-05-02
+*Type* : chore
+*Sujet* : Extraction complète documentation parent + enrichissement COLD
+
+*Contexte* :
+La session 000 avait créé la structure de gouvernance et 4 fichiers LAZY de référence.
+Il restait à extraire TOUTE la substantifique moelle des 27 fichiers de documentation parent
+(16 .md racine + 10 .prompts/ + 1 PROMPT_REPRISE.md) vers les bonnes couches de gouvernance.
+
+*Réalisé* :
+. Relecture exhaustive des 27 fichiers .md parent
+. Enrichissement encyclopédie COLD avec 5 nouvelles annexes (E à I) :
+  - Mapping complet .md → .adoc
+  - Structure confirmée mp3-organizer/ dans newpipe-gradle/
+  - Historique 9 sessions pré-gouvernance (avril 2026)
+  - 3 sessions mp3-organizer EPIC LLM Integration (LlmClient, Tâches Gradle, Agent Playlist)
+  - Archives 10 prompts (signatures méthodes, tests, couverture, commits)
+. Enrichissement npv_REFERENCE.adoc (DSL, Retry, Validation URL)
+. Nettoyage de 19 occurrences `../` dans 6 fichiers .adoc
+. Vérification zéro `../` sur l'ensemble des .adoc
+
+*Résultat* :
+- Encyclopédie COLD : 267 → 1129 lignes
+- npv_REFERENCE LAZY : 629 → 685 lignes
+- Zéro référence ../ dans tous les .adoc
+- EAGER stable à 559 lignes
+- Golden rule respectée : rien perdu, tout relocalisé
+
+*Fichiers enrichis* : 2 (.agents/encyclopedies/LAZY_EAGER_ENCYCLOPEDIE.adoc, .agents/npv_REFERENCE.adoc)
+*Fichiers nettoyés* : 6 (../)
+*Fichiers créés* : 1 (archive session 001)
+
+== Session 000
+
+*Date* : 2026-05-02
+*Type* : chore
+*Sujet* : Bootstrap gouvernance agent Eager/Lazy
+
+*Contexte* :
+Le projet `newpipe-gradle/newpipe-plugin` existait sans gouvernance agent structurée.
+La documentation parent (`newpipe-gradle/`) contenait 16 fichiers Markdown (AGENT.md, BACKLOG.md, etc.) mais pas de mécanisme de persistance du contexte entre sessions Opencode.
+
+*Réalisé* :
+. Création de la structure `.agents/` (sessions, archives, backup, encyclopedies)
+. Création de `opencode.json` (bootstrap bridge)
+. Création de `AGENT.adoc` — directives maîtres EAGER (règles absolues, architecture, backlog)
+. Création de `PROMPT_REPRISE.adoc` — mission session 1
+. Création de `LAZY_EAGER_ESSENTIALS.adoc` — principes stratégie
+. Création des 6 fichiers LAZY structurants (INDEX, HISTORY, PROCEDURES, CHECKLIST, MANAGER, TEST_COVERAGE)
+. Création de l'encyclopédie COLD (627 lignes — split de l'AGENT_MODUS_OPERANDI originel)
+. Intégration des données du dossier parent comme références LAZY
+
+*Résultat* :
+- Gouvernance agent complète en place (Eager/Lazy, Hot/Warm/Cold, split encyclopédique)
+- ~800 lignes EAGER — calibré pour DeepSeek-V4-Pro (stable 128K)
+- Backlog historique préservé en référence (42/42 points FAIT)
+
+*Prochaine session* :
+- Session 1 : définir la mission avec l'utilisateur
+- 6 options : auth, build, tests, migration IA, backlog, version catalog
+
+*Fichiers créés* : 14 fichiers de gouvernance (voir `.agents/sessions/000-bootstrap-gouvernance-agent.adoc`)

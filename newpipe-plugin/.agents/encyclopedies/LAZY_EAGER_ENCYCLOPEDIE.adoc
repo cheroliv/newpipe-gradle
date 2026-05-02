@@ -1,0 +1,1129 @@
+= LAZY_EAGER_ENCYCLOPEDIE — Méthodologie Complète de Gouvernance Agent
+:toc: left
+:toclevels: 4
+:sectnums:
+:icons: font
+
+[abstract]
+*COLD STORAGE* — Jamais chargé automatiquement. Consultation humaine uniquement.
+Documentation exhaustive de la stratégie de gouvernance agent Eager/Lazy, Hot/Warm/Cold et du split encyclopédique.
+Version originelle : `AGENT_MODUS_OPERANDI.adoc` (627 lignes) — splitée en `LAZY_EAGER_ESSENTIALS.adoc` (EAGER, 74 lignes) + ce fichier (COLD, ~600 lignes).
+Rien n'a été supprimé. Tout a été relocalisé.
+
+== P1 — Vue d'Ensemble
+
+=== Problème Résolu
+
+Face à la *fuite de contexte* entre les sessions d'un agent IA (Opencode), cette méthodologie fournit un système de gouvernance persistant basé sur des fichiers AsciiDoc, avec une dichotomie Eager/Lazy pour optimiser la consommation du token de contexte.
+
+Le problème fondamental : l'agent ne se souvient pas de la session précédente. L'architecture, les conventions, l'état du backlog — tout est perdu. Reconstruire ce contexte coûte 30-40% du temps de session.
+
+=== Principes Fondamentaux
+
+. *EAGER (Tableau de Bord)* — Tout ce qui est critique et fréquemment utilisé doit être immédiatement accessible. Chargé automatiquement en début de session.
+. *LAZY (Manuel du Propriétaire)* — Tout ce qui est contextuel ou volumineux doit être chargé sur demande.
+. *HOT/WARM/COLD* — Mécanisme de vieillissement qui empêche le contexte de grossir indéfiniment sans rien perdre.
+
+=== Analogie
+
+L'approche s'inspire de la gestion de cache informatique :
+- *EAGER* = cache L1 (immédiat, critique, petite taille)
+- *LAZY* = cache L2 (sur demande, plus volumineux)
+- *COLD (backup/)* = stockage froid (snapshots horodatés)
+- *COLD (encyclopedies/)* = bibliothèque de référence (jamais auto)
+
+== P2 — Structure des Fichiers
+
+=== Arborescence Complète
+
+```
+newpipe-plugin/
+├── opencode.json                             ← Pont bootstrap (6 lignes)
+├── AGENT.adoc                                ← EAGER — Règles absolues, architecture, backlog
+├── PROMPT_REPRISE.adoc                       ← EAGER — Mission session N (max 70 lignes)
+├── LAZY_EAGER_ESSENTIALS.adoc                ← EAGER — Principes stratégie (74 lignes)
+└── .agents/
+    ├── INDEX.adoc                             ← EAGER — Règles exécutives + roadmap + portfolio
+    ├── SESSIONS_HISTORY.adoc                  ← EAGER — Tableau chronologique (10 dernières)
+    ├── PROCEDURES.adoc                        ← LAZY — Templates détaillés 6 étapes
+    ├── SESSION_CHECKLIST.adoc                 ← LAZY — Déclencheurs transition
+    ├── AGENT_SESSION_MANAGER.adoc             ← LAZY — Règles gestion, seuils, alertes
+    ├── TEST_COVERAGE_ANALYSIS.adoc            ← LAZY — Suivi tests par classe
+    ├── encyclopedies/
+    │   └── LAZY_EAGER_ENCYCLOPEDIE.adoc       ← COLD — CE FICHIER (jamais auto)
+    ├── archives/
+    │   └── COMPLETED_TASKS_ARCHIVE_YYYY-MM.adoc ← LAZY — Tâches terminées par mois
+    ├── backup/
+    │   └── Y20XX-sessions-X-Y/               ← COLD — Vagues froides (snapshots)
+    └── sessions/
+        └── {N}-{type}-{sujet}.adoc           ← LAZY — Archives individuelles
+```
+
+=== Politique de Chargement
+
+. *Début session* : `AGENT.adoc` (auto via opencode.json) + `PROMPT_REPRISE.adoc` + `LAZY_EAGER_ESSENTIALS.adoc` + `.agents/INDEX.adoc` + `.agents/SESSIONS_HISTORY.adoc` → ~800 lignes EAGER
+. *Besoin détails* : charger `PROCEDURES.adoc`, `SESSION_CHECKLIST.adoc`, `AGENT_SESSION_MANAGER.adoc`, `sessions/` en LAZY
+. *Connaissance froide* : `encyclopedies/`, `backup/` — jamais automatique, consultation humaine
+
+== P3 — Règles Absolues
+
+*Git* — Interdictions formelles : `git add`, `git commit`, `git push`, `git commit --amend`
+
+*Fichiers de configuration* — Règle née de l'incident `site.yml` (bakery-plugin, session 2) :
+. Vérifier `git check-ignore` + `git ls-files` AVANT toute modification
+. Backup pré-modification OBLIGATOIRE
+. Modifier avec `Edit` (partiel), PAS `Write` (écrasant)
+. JAMAIS remplacer valeurs réelles par placeholders
+
+*Tests* — Interdiction de lancer en procédure de fin de session sans permission explicite
+
+*Build* — `publishToMavenLocal` obligatoire après chaque modification du code source (plugin Gradle)
+
+*Secrets et tokens* — JAMAIS affichés dans le terminal (streaming possible sur Discord/Twitch)
+
+*Modèle IA* — Calibré pour DeepSeek-V4-Pro (CSA+HCA, stable 128K). Ne pas remplacer par Kimi K2.6 (MLA pur, dégrade à 60K).
+
+== P4 — Cycle de Vie d'une Session
+
+=== Ouverture
+
+*Startup prompt* (envoyé par l'utilisateur) :
+```
+Reprends le contexte du projet via les fichiers de gouvernance (AGENT.adoc, PROMPT_REPRISE.adoc, LAZY_EAGER_ESSENTIALS.adoc, INDEX.adoc) et propose le point de départ.
+```
+
+*Vérifications* :
+```bash
+./gradlew :newpipe:build
+./gradlew sessionStatus
+```
+
+=== Pendant la Session
+
+*Règles de travail* :
+- 1 fichier à la fois (max 3 par session)
+- `publishToMavenLocal` après chaque modif de .kt
+- Proposer split si > 3 fichiers ou > 50 messages
+- Consulter le backlog dans `AGENT.adoc` ou `.agents/MIGRATION_REFERENCE.adoc` (US-1 à US-9)
+
+=== Fin de Session
+
+*Trigger* : « fin de session », « on arrête là », « je quitte »
+
+*Exécution silencieuse des 6 étapes* :
+
+. *Archive* : créer `.agents/sessions/{N}-{type}-{sujet-kebab-case}.adoc` avec Contexte, Actions, Résultats, Build & Tests, Prochaine Session
+. *PROMPT_REPRISE* : mettre à jour pour N+1 (résumé N, mission N+1, max 70 lignes)
+. *SESSIONS_HISTORY* : ajouter ligne N / Date / Type / Sujet / Score X/10
+. *INDEX* : mettre à jour sessions récentes, roadmap, portfolio
+. *TEST_COVERAGE* : mettre à jour si tests ajoutés ou modifiés
+. *COMPLETED_TASKS* : archiver tâches terminées
+
+*Étape 7 optionnelle* : rotation backup si N%10==0 OU EAGER > 500 lignes
+
+*Checklist finale obligatoire* — l'agent affiche la confirmation :
+```
+✅ Procédure de fin de session exécutée
+📋 Checklist :
+[✅] 1. Archive session N créée
+[✅] 2. PROMPT_REPRISE.adoc mis à jour pour session N+1
+[✅] 3. SESSIONS_HISTORY.adoc mis à jour
+[✅] 4. INDEX.adoc mis à jour
+[✅] 5. TEST_COVERAGE_ANALYSIS.adoc mis à jour (si applicable)
+[✅] 6. COMPLETED_TASKS_ARCHIVE.adoc mis à jour
+[✅] 7. Backup roté (si applicable)
+```
+
+== P5 — Métriques et Seuils
+
+=== Session Idéale
+
+|===
+| Métrique | Cible
+| Durée | 15-30 minutes
+| Fichiers modifiés | 1-3 maximum
+| Échanges LLM | 5-10 messages
+| Contexte tokens | < 50k
+===
+
+=== Signes d'Alerte
+
+. Agent répète des erreurs déjà corrigées → contexte saturé
+. Plus de 3 fichiers modifiés → scope trop large
+. Plus de 50 messages → attention diluée
+. Plus de 3 échanges sans progrès → enlisement
+. Contexte > 70k tokens → zone de dégradation
+. Agent propose modifier newpipe/ ET buildSrc/ simultanément → violation scope
+
+=== Règle d'Or
+
+*Mieux vaut 5 sessions de 20 minutes qu'une session de 2 heures avec debugging chaos.*
+
+== P6 — Types de Sessions
+
+[cols="1,2,3", options="header"]
+|===
+| Type | Détection | Méthodologie
+| *Création/Feature* | "crée", "ajoute", "implémente" | TDD : test → code → refactor
+| *Debug* | "bug", "erreur", "corrige", "fix" | Reproduire → Diagnostiquer → Fixer → Tester
+| *Analyse* | "analyse", "audite", "review" | Explorer → Documenter → Proposer
+| *Refactoring* | "refactore", "nettoie", "renomme" | Identifier → Extraire → Tester régression
+| *Documentation* | "documente", "explique" | Structurer → Rédiger → Relire
+| *Test* | "test", "couverture", "TDD" | Rouge → Vert → Refactor
+| *Chore* | "init", "bootstrap", "migration" | Planifier → Exécuter → Valider
+===
+
+=== Format de Proposition
+
+L'agent propose le type détecté avec :
+- Emoji + Type + 3 points clés + Question de confirmation
+
+== P7 — Amélioration Continue
+
+=== Métriques de Suivi
+
+. Nombre de sessions par semaine
+. Score moyen par session
+. Taux de détection correct du type
+. Progression EPIC / US
+
+=== Revue Hebdomadaire (Optionnelle)
+
+Chaque semaine :
+. Consulter `SESSIONS_HISTORY.adoc` pour les tendances
+. Vérifier les incohérences dans le portefeuille
+. Déclencher une rotation backup si nécessaire
+
+== P8 — Bootstrap Nouveau Projet
+
+*Jour 1, Session 0 — Checklist* :
+
+. Créer `opencode.json` (6 lignes, pointe vers `AGENT.adoc`)
+. Créer les dossiers : `mkdir -p .agents/sessions .agents/archives .agents/backup .agents/encyclopedies`
+. Créer `AGENT.adoc` (règles absolues, structure minimale v1)
+. Créer `PROMPT_REPRISE.adoc` (mission session 1, max 70 lignes)
+. Créer `.agents/INDEX.adoc` (règles exécutives + roadmap)
+. Créer les fichiers LAZY structurants (6 fichiers)
+. Ajouter le projet au Portefeuille de TOUS les INDEX.adoc existants
+
+== P9 — Défense en Profondeur contre la Saturation
+
+*3 Couches* :
+
+. *EAGER/LAZY* — Structure par *disponibilité* (tableau de bord vs manuel du propriétaire)
+. *HOT/WARM/COLD* — Structure par *fraîcheur* (10 actives vs références vs vagues froides)
+. *ESSENTIALS/ENCYCLOPÉDIE* — Structure par *densité* (compact critique vs exhaustif froid)
+
+*Métaphore des 3 Étagères* :
+- *Étagère 1 (EAGER)* — le plan de travail. Ce dont j'ai besoin maintenant.
+- *Étagère 2 (LAZY)* — la bibliothèque de consultation. Ce que je peux aller chercher.
+- *Cave (backup/ + encyclopedies/)* — les archives froides. L'agent n'y entre jamais. L'humain y descend pour distiller.
+
+== Annexe A — Glossaire
+
+*EAGER* : Fichier chargé automatiquement en début de session. Tableau de bord.
+*LAZY* : Fichier chargé sur demande explicite de l'agent. Manuel du propriétaire.
+*HOT* : Sous-ensemble EAGER — les 10 sessions les plus récentes.
+*WARM* : Sous-ensemble LAZY — références, procédures, agents spécialisés.
+*COLD* : Stockage froid — backup/ (vagues) et encyclopedies/ (connaissance). Jamais auto.
+*Sliding Window* : Fenêtre glissante de 10 sessions dans les fichiers EAGER.
+*Vague Froide* : Copie intégrale d'un état passé de la gouvernance, sans transformation.
+*Split Encyclopédique* : Séparation d'un document monolithique en ESSENTIALS (EAGER) + ENCYCLOPEDIE (COLD).
+*Portefeuille* : Tableau transverse listant tous les projets avec la même méthodologie.
+*Capteur* : Mécanisme à 3 déclencheurs pour la rotation backup (auto/seuil/manuel).
+*Rotation Backup* : Procédure qui migre les sessions N-10 et antérieures vers backup/.
+
+== Annexe B — Historique des Versions
+
+*Version 1.0* (2026-05-02) :
+- Bootstrap gouvernance pour `newpipe-plugin`
+- Fichier originel inspiré de `plantuml-plugin/AGENT_MODUS_OPERANDI.adoc` (627 lignes)
+- Adapté aux spécificités du plugin Gradle NewPipe (OAuth2 YouTube, migration IA, buildSrc)
+
+== Annexe C — Inconsistances Connues
+
+. `AGENT.adoc` et `.agents/MIGRATION_REFERENCE.adoc` marquent le backlog 100% FAIT (42/42 US-1 à US-9) — certaines US ont pu régresser depuis avril 2026
+. L'historique complet des sessions pré-gouvernance est archivé ci-dessous (Annexe G — Sessions Pré-Gouvernance)
+. Documentation parent Markdown intégralement migrée vers `.agents/*.adoc` (AsciiDoc) en session 000 et suivantes
+. Pas de `version catalog` (`gradle/libs.versions.toml`) dans `newpipe-gradle/` — à créer (EPIC LLM), template dans `.agents/npv_REFERENCE.adoc`
+
+== Annexe D — Références Croisées
+
+*Projets avec même méthodologie* :
+- `plantuml-gradle/plantuml-plugin` (138 sessions) — projet le plus mature, référence architecture
+- `magic_stick` (65 sessions) — ISO Linux live, adaptation SCRIPT_VERIFICATION
+- `bakery-gradle/bakery-plugin` (13 sessions) — plugin JBake, règle publishToMavenLocal
+- `cheroliv.com` (18 sessions) — site statique, agents spécialisés CODER/SCRUM_MASTER/PLANTUML
+- `jhipster-gradle-plugins` (6 sessions) — mono-repo, agents PLUGIN_DEVELOPER/BACKLOG_MANAGER
+- `openclaw/quizz-benchmark-plugin` (2 sessions) — projet récent, bootstrap minimal
+
+*Tous les fichiers documentation parent (`newpipe-gradle/*.md`) ont été extraits et relocalisés dans `.agents/`* :
+- `AGENT.md` (584 lignes) → contenu intégré dans `AGENT.adoc` + `.agents/npv_REFERENCE.adoc`
+- `ARCHITECTURE.md` → `.agents/npv_REFERENCE.adoc` (Stack, Patterns, Structure)
+- `AUTH_GUIDE.md` → `.agents/AUTH_REFERENCE.adoc` (168 lignes LAZY)
+- `BACKLOG.md` → `AGENT.adoc` (section Backlog EPICs) + Annexe G ci-dessous (historique sessions)
+- `EPIC_DOWNLOAD_AUTHENTICATED.md` → `.agents/MIGRATION_REFERENCE.adoc` (US-1 à US-9 complètes)
+- `EPIC_LLM_INTEGRATION.md` → `.agents/npv_REFERENCE.adoc` (Module IA Cible + Roadmap)
+- `MIGRATION_MATRIX.md` → `.agents/MIGRATION_REFERENCE.adoc` (matrice + roadmap)
+- `TESTING_STRATEGY.md` → `.agents/TEST_REFERENCE.adoc` (241 lignes LAZY)
+- `COMMANDS.md` → `.agents/npv_REFERENCE.adoc` (section Commandes Complètes)
+- `PROJECT_STRUCTURE.md` → `.agents/npv_REFERENCE.adoc` (Structure + mp3-organizer)
+- `CUSTOMIZATION.md` → `.agents/npv_REFERENCE.adoc` (section Personnalisation)
+- `BUILDSRC_ARCHITECTURE.md` → `.agents/npv_REFERENCE.adoc` (section BuildSrc)
+- `PROJECT_SUMMARY.md` → `.agents/npv_REFERENCE.adoc` (section Métriques)
+- `QUICK_START.md` → contenu intégré dans commandes des fichiers LAZY
+- `BACKLOG_BACKUP.md` → Annexe G ci-dessous (état intermédiaire 22%)
+- `PROMPT_REPRISE.md` → `PROMPT_REPRISE.adoc` (mission session) + Annexe G ci-dessous
+
+== Annexe E — Mapping Complet des Fichiers (Extraction documentation parent → .agents/*.adoc)
+
+|===
+| Fichier source (parent).md | Fichier cible (.agents/).adoc | Type | Lignes
+| `AGENT.md` | `AGENT.adoc` + `npv_REFERENCE.adoc` | EAGER + LAZY | 304 + 629
+| `ARCHITECTURE.md` | `npv_REFERENCE.adoc` § Stack, Patterns, Structure | LAZY | inline
+| `AUTH_GUIDE.md` | `AUTH_REFERENCE.adoc` | LAZY | 168
+| `BACKLOG.md` | `AGENT.adoc` § Backlog + `MIGRATION_REFERENCE.adoc` + Annexe G | EAGER + LAZY + COLD | inline
+| `BACKLOG_BACKUP.md` | Annexe G ci-dessous | COLD | inline
+| `BUILDSRC_ARCHITECTURE.md` | `npv_REFERENCE.adoc` § BuildSrc | LAZY | inline
+| `COMMANDS.md` | `npv_REFERENCE.adoc` § Commandes Complètes | LAZY | inline
+| `CUSTOMIZATION.md` | `npv_REFERENCE.adoc` § Personnalisation | LAZY | inline
+| `EPIC_DOWNLOAD_AUTHENTICATED.md` | `MIGRATION_REFERENCE.adoc` § EPIC — Download Auth | LAZY | inline
+| `EPIC_LLM_INTEGRATION.md` | `npv_REFERENCE.adoc` § Module IA Cible | LAZY | inline
+| `MIGRATION_MATRIX.md` | `MIGRATION_REFERENCE.adoc` § Matrice de Migration | LAZY | inline
+| `PROJECT_STRUCTURE.md` | `npv_REFERENCE.adoc` § Structure | LAZY | inline
+| `PROJECT_SUMMARY.md` | `npv_REFERENCE.adoc` § Métriques | LAZY | inline
+| `PROMPT_REPRISE.md` | `PROMPT_REPRISE.adoc` + Annexe G | EAGER + COLD | 56
+| `QUICK_START.md` | Commandes dans fichiers LAZY | LAZY | inline
+| `TESTING_STRATEGY.md` | `TEST_REFERENCE.adoc` | LAZY | 241
+|===
+
+== Annexe F — Projets Connectés (mp3-organizer inside newpipe-gradle/)
+
+*mp3-organizer* est un sous-projet de `newpipe-gradle/` :
+- *Emplacement* : `/home/cheroliv/workspace/__repositories__/newpipe-gradle/mp3-organizer/`
+- *Build* : `./gradlew build` (depuis `mp3-organizer/`)
+- *Version catalog* : `mp3-organizer/gradle/libs.versions.toml` ✅ déjà en place
+- *Module IA* : `mp3-organizer/src/main/kotlin/com/mp3organizer/ai/` (LlmClient.kt, PlaylistAgent.kt, SqlGenerationAgent.kt, MaintenanceAgent.kt, PlaySmartTask.kt, PlayArtistTask.kt, PlayGenreTask.kt)
+- *Database* : PostgreSQL 15+ via R2DBC (`mp3-organizer/src/main/kotlin/com/mp3organizer/database/Database.kt`)
+- *Playlists* : XSPF via VLC (`mp3-organizer/src/main/kotlin/com/mp3organizer/playlist/XspfGenerator.kt`)
+- *Docker* : `mp3-organizer/docker-compose.yml` (PostgreSQL + ffmpeg + Portainer)
+- *Lien avec newpipe-plugin* : EPIC LLM Integration copie les patterns IA de mp3-organizer vers newpipe-plugin
+
+*Structure confirmée* :
+```
+newpipe-gradle/
+├── mp3-organizer/           ← PROJET FRÈRE (build séparé)
+│   ├── build.gradle.kts
+│   ├── settings.gradle.kts
+│   ├── gradle/libs.versions.toml
+│   ├── docker-compose.yml
+│   └── src/main/kotlin/com/mp3organizer/
+│       ├── ai/
+│       │   ├── LlmClient.kt
+│       │   ├── PlaylistAgent.kt
+│       │   ├── SqlGenerationAgent.kt
+│       │   ├── MaintenanceAgent.kt
+│       │   ├── PlaySmartTask.kt
+│       │   ├── PlayArtistTask.kt
+│       │   └── PlayGenreTask.kt
+│       ├── playlist/XspfGenerator.kt
+│       ├── database/
+│       │   ├── Database.kt
+│       │   └── DatabaseExtension.kt
+│       └── Models.kt
+└── newpipe-plugin/          ← PROJET FRÈRE (gouvernance AsciiDoc)
+```
+
+== Annexe G — Historique Complet des Sessions Pré-Gouvernance (avril 2026)
+
+Toutes les sessions ci-dessous ont eu lieu AVANT le bootstrap de la gouvernance Eager/Lazy (session 000 du 2026-05-02).
+Ces sessions utilisaient le workflow Markdown `AGENT.md` + `PROMPT_REPRISE.md` + `BACKLOG.md`.
+
+=== Session 2026-04-14 : Découpage de l'Épic en User-Stories
+
+*Objectif* : Analyser le code existant et découper l'épic en US
+
+*Réalisé* :
+- Analyse du code existant (AuthSessionTask, SessionManager, DownloadMusicTask)
+- Identification des US-1 et US-2 comme "FAIT"
+- Création de 6 nouvelles US (US-3 à US-8)
+- Estimation des points et priorités
+- Définition des critères d'acceptation et scénarios de test
+- Rédaction de EPIC_DOWNLOAD_AUTHENTICATED.md
+
+*Participants* : Cheroliv + OpenCode Agent
+*Durée* : ~2 heures
+
+*Décisions importantes* :
+- US-1 et US-2 considérées comme FAITES car code déjà implémenté
+- Priorité haute donnée à US-4 (gestion erreurs) pour fiabiliser l'existant
+- US-7 (tests intégration) priorisée pour valider avec vrais comptes
+
+*Prochaine session prévue* : Commencer US-4 ou US-7
+
+=== Session 2026-04-15 : Debug Build — Correction Erreurs de Compilation
+
+*Objectif* : Corriger les erreurs de compilation Kotlin
+
+*Contexte* :
+- Branch : main (ahead of origin/main de 1 commit)
+- Commit : 6b6a0ab — Refactor to remove session-based auth
+- Statut initial : ❌ Build échoué — erreurs de compilation Kotlin
+
+*Problèmes identifiés* :
+. `NewpipeExtension.kt:25-26` — Syntaxe incorrecte pour `ListProperty<Pair<String, String>>`
+. `NewpipeManager.kt:38-54` — Utilisation incorrecte de `.set()` sur des propriétés de task
+. `DownloadMusicTask.kt:49` — Type de `tuneEntries` incompatible
+
+*Corrections appliquées* :
+. ✅ Changé `ListProperty<Pair<String, String>>` en `ListProperty<String>` avec encodage `artist|url`
+. ✅ Corrigé l'affectation des propriétés avec `=` au lieu de `.set()`
+. ✅ Adapté DownloadMusicTask pour parser les entries au format `artist|url`
+
+*Fichiers modifiés* : `NewpipeExtension.kt`, `NewpipeManager.kt`, `DownloadMusicTask.kt`
+*Résultat* : `BUILD SUCCESSFUL in 14s`
+*Durée* : ~30 minutes
+
+*Décisions* : Utilisation d'un format `artist|url` pour encoder les paires, parsing avec `split("|", limit = 2)`
+
+=== Session 2026-04-15 : US-1 & US-2 — Validation Code Existant
+
+*Objectif* : Valider que US-1 (Authentification Initiale) et US-2 (Téléchargement Authentifié) sont complètes
+
+*Statut* : ✅ FAIT (code déjà implémenté avant le découpage)
+- US-1 : AuthSessionTask.kt avec Device Flow OAuth2
+- US-2 : SessionManager.kt Round-Robin + DownloadMusicTask.kt
+
+=== Session 2026-04-15 : US-4 — Gestion des Erreurs d'Authentification
+
+*Points* : 3 | *Statut* : ✅ FAIT
+
+*Fichiers créés/modifiés* :
+- `AuthErrorHandler.kt` (amélioré avec logErrorSummary)
+- `SessionManager.kt` (ajout recordError, getErrors, logErrorSummary)
+- `DownloaderImpl.kt` (intégration AuthErrorHandler)
+- `DownloadMusicTask.kt` (appel logErrorSummary en fin de tâche)
+- `AuthErrorHandlerTest.kt` (17 tests)
+- `SessionManagerTest.kt` (5 tests ajoutés)
+
+*Scénarios gérés* : token révoqué, token expiré, client_secret invalide, quota dépassé, compte suspendu
+*Messages* : français avec emoji (⚠️, ❌, 🚫)
+
+=== Session 2026-04-15 : US-3 — Refresh Automatique des Tokens
+
+*Points* : 5 | *Statut* : ✅ FAIT
+
+*Fichiers créés/modifiés* :
+- `TokenRefresher.kt` (créé) — logique de refresh OAuth2
+- `SessionManager.kt` (modifié) — `refreshIfNeeded()`, `markInvalid()`
+- `NewpipeManager.kt` (modifié)
+
+*Comportement* : vérifie expiration accessToken → refresh via refreshToken → retry avec autre session si échec
+*Tests* : 27 tests unitaires passants
+*Sécurité* : accessToken en mémoire uniquement, jamais persisté dans sessions.yml
+
+=== Session 2026-04-15 : US-6 — Monitoring de l'État des Sessions
+
+*Points* : 3 | *Statut* : ✅ FAIT
+
+*Fichiers créés/modifiés* :
+- `SessionStatusTask.kt` (créé) — tâche Gradle `sessionStatus`
+- `SessionMonitor.kt` (créé) — tracking requêtes/session
+- `NewpipeManager.kt` (modifié) — enregistrement tâche
+- `Models.kt` (modifié) — @JsonIgnoreProperties
+
+*Affichage* : tableau bordures Unicode avec statut, expiry, requêtes/jour, dernière utilisation
+
+=== Session 2026-04-15 : US-7 — Tests d'Intégration
+
+*Points* : 5 | *Statut* : ✅ FAIT
+
+*Fichiers créés* :
+- `YouTubeAuthIntegrationTest.kt` — tests taggués `@Tag("real-youtube")`
+- `test-sessions.yml`
+
+*Tests* : download member-only video, refresh expired token, fallback anonymous
+*Variables env requises* : TEST_YOUTUBE_CLIENT_ID, TEST_YOUTUBE_CLIENT_SECRET, TEST_YOUTUBE_REFRESH_TOKEN
+
+=== Session 2026-04-15 : US-5 & US-8 — Validation Complète
+
+*Objectif* : Finaliser les US-5 (Vidéos 18+) et US-8 (Playlists Privées)
+
+*Réalisé* :
+- Validation US-5 : AgeVerificationHandler.kt (210 lignes) + 16 tests
+- Validation US-8 : PrivatePlaylistHandler.kt + 21 tests
+- Mise à jour du BACKLOG.md
+- Archive du prompt de reprise US-8
+
+*Fichiers validés* :
+- `AgeVerificationHandler.kt` : Détection regex 5 raisons (AGE_VERIFICATION_REQUIRED, SIGN_IN_REQUIRED, MINOR_ACCOUNT, AGE_GATE_UNCIRCUMVENTABLE, NOT_AGE_RESTRICTED)
+- `AgeRestrictedVideoException.kt` (43 lignes)
+- `PrivatePlaylistHandler.kt` : Détection 6 raisons
+- `PrivatePlaylistException.kt`
+
+*Résultat* : `✅ BACKLOG COMPLÈTE : 37/37 points (100%)`
+
+=== Session 2026-04-15 : US-9 — CLI Interactive
+
+*Points* : 5 | *Statut* : ✅ FAIT
+
+*Fichier* : `InteractiveCli.kt`
+*Commande* : `./gradlew newpipeInteractive`
+*Menu* : 7 options (sessions, téléchargement, status, playlists, config, aide, quitter)
+*Affichage* : bordures Unicode
+
+*Commit* : `feat(US-9): Add interactive CLI task`
+
+=== Synthèse Pré-Gouvernance
+
+*Période* : 14-15 avril 2026 (2 jours, 9 sessions)
+*Résultat* : EPIC Download Auth 100% (42/42 points, US-1 à US-9)
+*Tests* : 80+ tests unitaires passants
+*Build* : ✅ BUILD SUCCESSFUL
+*Lignes de code* : ~6500 (newpipe-plugin)
+*Fichiers Kotlin* : 25+
+*Tâches Gradle* : 6 custom
+
+=== Workflow Pré-Gouvernance (obsolète après session 000)
+
+Le workflow Markdown utilisait :
+. `AGENT.md` (584 lignes) comme contexte agent
+. `PROMPT_REPRISE.md` (racine) comme fichier de mission actif
+. `.prompts/PROMPT_REPRISE_YYYY-MM-DD_USX-*.md` comme archives
+. `BACKLOG.md` (916 lignes) comme backlog détaillé
+. `BACKLOG_BACKUP.md` (843 lignes) comme backup intermédiaire (état à 22%)
+
+Ce workflow a été *remplacé* par la gouvernance Eager/Lazy AsciiDoc en session 000.
+Les fichiers Markdown parent contiennent la substantifique moelle intégralement extraite.
+Les prompts archivés dans `.prompts/` restent consultables mais ne font plus partie du workflow actif.
+
+== Annexe H — Sessions mp3-organizer (EPIC LLM Integration, avril 2026)
+
+Ces 3 sessions ont implémenté le module IA dans le projet frère `mp3-organizer/`.
+Le code produit est la cible de l'EPIC LLM Integration pour `newpipe-plugin` (sessions 4-6, ⏳ en attente).
+
+=== Session 1 (2026-04-14) — Setup LLM Client
+
+*Objectif* : Créer le client LLM dans mp3-organizer
+
+*Réalisé* :
+- Création de `LlmClient.kt` avec API ChatModel (langchain4j 1.12.2)
+- Modèle `gemma4:e4b-it-q4_K_M` configuré (Ollama local)
+- Méthodes `chat()` et `chatWithContext()` implémentées
+- Test simple validé
+
+*Critères d'acceptation validés* :
+```kotlin
+val llm = LlmClient()
+val response = llm.chat("Bonjour")
+assert(response.isNotEmpty())
+```
+
+*Fichiers créés* :
+- `mp3-organizer/src/main/kotlin/com/mp3organizer/ai/LlmClient.kt`
+
+*Problèmes* : Aucun
+
+*Stack technique* :
+```kotlin
+import dev.langchain4j.model.chat.ChatModel
+import dev.langchain4j.model.ollama.OllamaChatModel
+
+class LlmClient(
+    private val baseUrl: String = "http://localhost:11434",
+    private val modelName: String = "gemma4:e4b-it-q4_K_M"
+) {
+    private val model: ChatModel by lazy {
+        OllamaChatModel.builder()
+            .baseUrl(baseUrl)
+            .modelName(modelName)
+            .temperature(0.7)
+            .build()
+    }
+
+    suspend fun chat(prompt: String, systemMessage: String? = null): String {
+        return model.chat(buildFullPrompt(prompt, systemMessage))
+    }
+}
+```
+
+=== Session 2 (2026-04-14) — Tâches Gradle IA
+
+*Objectif* : Créer les tâches Gradle IA dans mp3-organizer
+
+*Réalisé* :
+- Fonction helper `registerJavaExecTask()` créée dans `build.gradle.kts`
+- 4 tâches « intelligence » ajoutées : `llmChat`, `sqlPrompt`, `maintenance`, `analyzeQuery`
+- 3 tâches « média » ajoutées : `playSmart`, `playArtist`, `playGenre`
+- Toutes les tâches dans le groupe `mp3-organizer-media`
+- Test avec `./gradlew playSmart --args="jazz"` réussi
+
+*Fichiers créés/modifiés* :
+- `mp3-organizer/build.gradle.kts` (modifié — ajout registerJavaExecTask + 7 tâches)
+
+*Pattern registerJavaExecTask* :
+```kotlin
+fun registerJavaExecTask(
+    name: String, description: String, group: String,
+    mainClass: String, vararg args: String = emptyArray()
+) {
+    tasks.register<JavaExec>(name) {
+        this.description = description
+        this.group = group
+        classpath = sourceSets["main"].runtimeClasspath
+        this.mainClass.set(mainClass)
+        if (args.isNotEmpty()) this.args = args.toList()
+    }
+}
+```
+
+*Liste des tâches créées* :
+[cols="1,3,2", options="header"]
+|===
+| Tâche | Description | Groupe
+| `playSmart` | LLM génère playlist depuis DB + lance VLC | mp3-organizer-media
+| `playArtist` | Playlist par artiste + VLC | mp3-organizer-media
+| `playGenre` | Playlist par genre + VLC | mp3-organizer-media
+| `llmChat` | Chat interactif avec LLM | mp3-organizer-media
+| `sqlPrompt` | Traduit prompt en SQL | mp3-organizer-media
+| `maintenance` | Analyse maintenance code | mp3-organizer-media
+| `analyzeQuery` | Optimise requêtes SQL | mp3-organizer-media
+|===
+
+=== Session 3 (2026-04-14) — Agent Playlist + XspfGenerator + VLC
+
+*Objectif* : Orchestrer LLM → PostgreSQL → XSPF → VLC
+
+*Réalisé* :
+- `PlaylistAgent.kt` créé avec génération SQL via LLM
+- `XspfGenerator.kt` pour format VLC compatible
+- `PlaySmartTask.kt` avec orchestration complète (prompt → DB → playlist → VLC)
+- `PlayArtistTask.kt` et `PlayGenreTask.kt`
+- Extensions `Database.kt` pour requêtes paramétrées
+- Lancement VLC via `ProcessBuilder`
+
+*Fichiers créés* :
+- `mp3-organizer/src/main/kotlin/com/mp3organizer/ai/PlaylistAgent.kt`
+- `mp3-organizer/src/main/kotlin/com/mp3organizer/playlist/XspfGenerator.kt`
+- `mp3-organizer/src/main/kotlin/com/mp3organizer/ai/PlaySmartTask.kt`
+- `mp3-organizer/src/main/kotlin/com/mp3organizer/ai/PlayArtistTask.kt`
+- `mp3-organizer/src/main/kotlin/com/mp3organizer/ai/PlayGenreTask.kt`
+- `mp3-organizer/src/main/kotlin/com/mp3organizer/database/Database.kt` (modifié — extensions)
+- `mp3-organizer/src/main/kotlin/com/mp3organizer/database/DatabaseExtension.kt`
+
+*PlaylistAgent — Méthodes* :
+- `generatePlaylist(prompt: String)` : Prompt naturel → SQL → Playlist
+- `generatePlaylistByArtist(artistName: String)` : Playlist par artiste
+- `generatePlaylistByGenre(genreName: String)` : Playlist par genre
+- `generateRandomPlaylist(filters: Map)` : Playlist aléatoire avec filtres
+
+*Critères d'acceptation validés* :
+```kotlin
+val agent = PlaylistAgent(llmClient, database)
+val playlist = agent.generatePlaylist("jazz piano")
+assert(playlist.tracks.isNotEmpty())
+```
+
+*Workflow complet* :
+```
+Prompt: "Je veux du jazz piano pour coder le soir"
+ → LLM (gemma4) + DB Schema → Génère requête SQL
+ → PostgreSQL (R2DBC) → Retourne liste de tracks
+ → XspfGenerator → Crée fichier .xspf (VLC playlist)
+ → VLC (Exec Task) → Ouvre et joue la playlist
+```
+
+*Commandes* :
+```bash
+./gradlew playSmart --args="jazz piano détente pour coder"
+./gradlew playArtist --args="Miles Davis"
+./gradlew playGenre --args="jazz"
+```
+
+=== Tableau de Suivi EPIC LLM (post session 3)
+
+| Fonctionnalité | mp3-organizer | newpipe-plugin | Status |
+|----------------|---------------|----------------|--------|
+| LLM Client | ✅ Session 1 | ⏳ Session 4 | Migration en attente |
+| Playlist Agent | ✅ Session 3 | ⏳ Session 4 | À adapter pour YouTube |
+| XSPF Generator | ✅ Session 3 | ⏳ Session 4 | À copier/adapter |
+| Tâches Gradle IA | ✅ Session 2 | ⏳ Session 4-5 | À créer |
+| Version Catalog | ✅ mp3-organizer | ❌ | À créer dans newpipe-gradle/ |
+| Config YAML | ❌ | ⏳ Session 5 | À créer (inspiré plantuml-gradle) |
+| Tests WireMock | ❌ | ⏳ Session 6 | À créer |
+| Intégration VLC | ✅ Session 3 | ❌ | Non requis pour NewPipe |
+
+=== Roadmap Sessions Restantes (newpipe-plugin, ⏳ en attente)
+
+*Session 4* — Migration vers NewPipe Plugin :
+- Copier `LlmClient.kt` vers `newpipe-plugin/newpipe/src/main/kotlin/com/cheroliv/newpipe/ai/`
+- Copier `PlaylistAgent.kt` → `SessionGeneratorAgent.kt` (adapter pour YouTube)
+- Copier `XspfGenerator.kt` → `PlaylistGenerator.kt` (adapter pour NewPipe)
+- Ajouter dépendances langchain4j dans `build.gradle.kts`
+- Créer tâches Gradle `suggestSessions`, `generatePlaylist`
+
+*Session 5* — Configuration & RAG :
+- Créer `NewpipeConfig.kt` avec support YAML
+- Implémenter `ConfigLoader` et `ConfigMerger` (inspiré plantuml-gradle)
+- Ajouter support properties CLI (`-Pnewpipe.llm.model=...`)
+- Créer index RAG pour la codebase newpipe
+
+*Session 6* — Tests & Validation :
+- Tests unitaires avec WireMock (inspiré plantuml-gradle)
+- Tests fonctionnels avec GradleTestKit
+- Tests d'intégration Ollama (tag `real-llm`)
+- Validation syntaxe YAML générée
+
+=== Spécifications Gemma 4 E4B (modèle IA local)
+
+*Spécifications* :
+- Taille : 9.6GB
+- Contexte : 128K tokens
+- Modalités : Texte, Image, Audio (compréhension uniquement)
+- Type : Edge model (optimisé local)
+- Forces : Raisonnement, code, compréhension langage naturel
+
+*Installation* :
+```bash
+ollama pull gemma4:e4b-it-q4_K_M
+ollama serve
+```
+
+*Stack IA complète* :
+```yaml
+IA / LLM:
+  - LangChain4j 1.12.2
+  - Ollama (local, http://localhost:11434)
+  - Modèle local: gemma4:e4b-it-q4_K_M (9.6GB, multimodal)
+  - Modèle agent: deepseek-v4-pro (via Ollama cloud, CSA+HCA, 1M contexte)
+
+YouTube:
+  - NewPipeExtractor v0.24.0
+  - OAuth2 Google API
+  - Cookies de session
+
+Base de données (mp3-organizer uniquement):
+  - PostgreSQL 15+
+  - R2DBC (reactive)
+  - Connection Pool
+
+Lecture (mp3-organizer uniquement):
+  - VLC (via ProcessBuilder)
+  - Format: XSPF playlists
+
+Docker (mp3-organizer):
+  - ffmpeg (conversion audio)
+  - Portainer (gestion containers)
+```
+
+=== Mapping Migration IA
+
+| Composant | Source (mp3-organizer) | Cible (newpipe-plugin) | Adaptation |
+|-----------|------------------------|------------------------|------------|
+| LlmClient | `com.mp3organizer.ai.LlmClient.kt` | `com.cheroliv.newpipe.ai.LlmClient.kt` | Changer package |
+| PlaylistAgent | `com.mp3organizer.ai.PlaylistAgent.kt` | `com.cheroliv.newpipe.ai.SessionGeneratorAgent.kt` | SQL→YAML, DB→NewPipe |
+| XspfGenerator | `com.mp3organizer.playlist.XspfGenerator.kt` | `com.cheroliv.newpipe.playlist.PlaylistGenerator.kt` | XSPF→Playlist YouTube |
+| PlaySmartTask | `com.mp3organizer.ai.PlaySmartTask.kt` | `com.cheroliv.newpipe.tasks.GeneratePlaylistTask.kt` | DB→YouTube API, VLC→téléchargement |
+| Database | `com.mp3organizer.database.Database.kt` | ❌ Non requis | PostgreSQL inutile |
+| Version Catalog | `mp3-organizer/gradle/libs.versions.toml` | `newpipe-gradle/gradle/libs.versions.toml` | Copier + adapter
+
+== Annexe I — Archives Chronologiques des Prompts (avril 2026)
+
+Substantifique moelle extraite des 10 fichiers `.prompts/PROMPT_REPRISE_*.md`.
+Détails d'implémentation non capturés ailleurs : signatures de méthodes, décomptes de tests,
+métriques de couverture exactes, commits.
+
+=== Prompt US-4 — Gestion Erreurs Auth (completed)
+
+*Méta* : date=2026-04-15, us=US-4, status=completed, next_us=US-7/US-3/US-6
+
+*Fichiers modifiés* :
+- `AuthErrorHandler.kt` : Ajouté `logErrorSummary()` pour rapport final
+- `SessionManager.kt` : Ajouté `recordError()`, `getErrors()`, `logErrorSummary()`
+- `DownloaderImpl.kt` : Intègre AuthErrorHandler sur HTTP 401/403
+- `DownloadMusicTask.kt` : Affiche résumé des erreurs en fin de tâche
+- `build.gradle.kts` : Ajouté `useJUnitPlatform()` pour les tests
+
+*Tests* : `AuthErrorHandlerTest.kt` (17 tests HTTP/OAuth2/exceptions) + `SessionManagerTest.kt` (5 tests ajoutés error tracking) = 27 tests passent
+
+*Backlog* : 30% complété (11/37 points)
+
+*Branch* : main (ahead of origin/main de 1 commit — US-4)
+*Build* : ✅ BUILD SUCCESSFUL
+
+=== Prompt US-7 — Tests Intégration (completed)
+
+*Méta* : date=2026-04-15, us=US-7, status=completed, next_us=US-3/US-6/US-5
+
+*Fichiers créés* :
+- `YouTubeAuthIntegrationTest.kt` : 3 tests taggués `@Tag("real-youtube")`
+  - `download member-only video with authenticated session`
+  - `refresh expired token automatically`
+  - `fallback to anonymous when all sessions invalid`
+- `test-sessions.yml` : Template pour configuration des tests
+- `README_TESTS.md` : Guide complet de configuration
+
+*Fichiers modifiés* : Aucun (utilise SessionManager et Session existants)
+
+*Tests* : Tests skippés quand variables d'environnement non définies (comportement attendu)
+
+*Backlog* : 43% complété (16/37 points)
+
+*Branch* : main (ahead of origin/main de 6 commits — US-4 + US-7)
+*Build* : ✅ BUILD SUCCESSFUL, 27 tests unitaires + 3 tests intégration (skippés)
+
+=== Prompt US-3 — Refresh Automatique Tokens (completed)
+
+*Méta* : date=2026-04-15, us=US-3, status=completed, next_us=US-6/US-5
+
+*Fichiers créés* :
+- `TokenRefresher.kt` : Logique de refresh OAuth2
+  - `refreshIfNeeded(session: Session)` : Refresh si token expiré ou manquant
+  - `forceRefresh(session: Session)` : Force le refresh (tests/révocation)
+  - Utilise le flow `refresh_token` avec `client_id` + `client_secret`
+  - Tokens stockés uniquement en mémoire (jamais écrits dans sessions.yml)
+
+*Fichiers modifiés* :
+- `SessionManager.kt` : Ajout `TokenRefresher` en dépendance optionnelle (pour tests);
+  `next()` appelle `refreshIfNeeded()` avant de retourner la session;
+  si refresh échoue → session marquée invalide, retry avec autre session
+- `NewpipeManager.kt` : `buildSessionManager()` passe un `TokenRefresher` au `SessionManager`
+
+*Comportement* :
+```kotlin
+// Avant chaque requête YouTube :
+// 1. SessionManager.next() sélectionne une session (Round-Robin)
+// 2. TokenRefresher.refreshIfNeeded() vérifie l'expiry
+// 3. Si expiré → refresh OAuth2 → nouvel accessToken + expiry
+// 4. Si refresh échoue (HTTP 400) → session marquée invalide, retry avec autre
+```
+
+*Tests* : ✅ Compilation OK, 27 tests unitaires passants (dont 9 pour SessionManager), build complet validé
+
+*Backlog* : 51% complété (19/37 points)
+
+*Branch* : main (ahead of origin/main de 6 commits — US-4 + US-7 + US-3)
+*Build* : ✅ BUILD SUCCESSFUL
+
+*Derniers commits (US-4/US-7/US-3)* :
+- US-3 : Refresh automatique des tokens
+- US-7 : Tests d'intégration avec vrais comptes
+- US-4 : Gestion des erreurs d'authentification
+
+=== Prompt US-6 — Monitoring Sessions (completed)
+
+*Méta* : date=2026-04-15, us=US-6, status=completed, next_us=US-5/US-8
+
+*Fichiers créés* :
+- `SessionMonitor.kt` : Tracking des sessions en mémoire
+  - `register(session)` : Enregistre une session
+  - `recordUsage(sessionId, expiry)` : Track utilisation
+  - `markInvalid(sessionId)` : Marque session invalide
+  - `getAllStats()` : Récupère toutes les stats
+  - `getTodayRequestCount(sessionId)` : Requêtes aujourd'hui
+  - `getLastUsedString(sessionId)` : Temps depuis dernière utilisation
+- `SessionStatusTask.kt` : Tâche Gradle avec affichage tableau
+  - Affiche : statut, expiry token, requêtes, dernière utilisation
+  - Formatage tableau avec bordures Unicode
+  - Option `--sessions` pour chemin personnalisé
+
+*Fichiers modifiés* :
+- `NewpipeManager.kt` : Ajout de `sessionStatus` dans `configure()`
+- `Models.kt` : Ajout de `@JsonIgnoreProperties` sur `SessionCredentials`
+- `DownloaderPlugin.kt` : Appel de `NewpipeManager.configure()`
+
+*Commande validée* : `./gradlew sessionStatus`
+
+*Affichage réel* (sortie confirmée) :
+```
+╔══════════════════════════════════════════════════════════════════════╗
+║  État des Sessions YouTube                                           ║
+╠══════════════════════════════════════════════════════════════════════╣
+║  │ [compte-principal]                                               ║
+║  │  ├ Statut      : ✗ Inactif                                        ║
+║  │  ├ Token expire : Unknown                                          ║
+║  │  ├ Requêtes ajd: 0/1000                                            ║
+║  │  └ Dernière util: Never                                            ║
+╚══════════════════════════════════════════════════════════════════════╝
+```
+
+*Tests* : ✅ Compilation OK, tâche `sessionStatus` fonctionnelle, build complet validé
+
+*Backlog* : 59% complété (22/37 points)
+
+*Branch* : main (ahead of origin/main)
+*Build* : ✅ BUILD SUCCESSFUL, 27 tests unitaires + 3 tests intégration
+
+*Derniers commits* : US-6, US-3, US-7, US-4
+
+=== Prompt US-5 — Vidéos 18+ (in_progress → startup)
+
+*Méta* : date=2026-04-15, us=US-5, status=in_progress, next_us=US-8
+
+*État avant démarrage* : US-6 terminée, Backlog 59% (22/37)
+
+*US-5 Contexte* : Support des vidéos avec restriction d'âge
+
+*Problèmes à gérer* :
+. Détection des vidéos age-restricted
+. Vérification que le compte est majeur (date de naissance >= 18 ans)
+. Gestion des erreurs spécifiques (age-gate, contenu sensible)
+. Messages clairs pour l'utilisateur
+
+*Implémentation prévue* (pseudo-code capturé du prompt) :
+```kotlin
+// AgeVerificationHandler.kt
+class AgeVerificationHandler {
+    fun handleAgeRestrictedError(
+        videoUrl: String,
+        session: Session?,
+        error: Throwable
+    ): AgeVerificationResult {
+        return when {
+            error.isAgeRestricted() && session == null ->
+                AgeVerificationResult.UNAUTHENTICATED
+            error.isAgeRestricted() && !session.isAccountAdult() ->
+                AgeVerificationResult.MINOR_ACCOUNT
+            error.isAgeRestricted() ->
+                AgeVerificationResult.SUCCESS
+            else ->
+                AgeVerificationResult.NOT_AGE_RESTRICTED
+        }
+    }
+}
+```
+
+*Points* : 8 | *Priorité* : 🟡 Basse
+
+=== Prompt US-8 — Playlists Privées (startup)
+
+*Méta* : date=2026-04-15, us=US-8, status=pending, previous_us=US-5
+
+*État avant démarrage* : US-5 terminée, Backlog 67% (22/37)
+*Commit US-5* : `feat(US-5): Add age-restricted video detection and handling`
+
+*Problèmes à gérer* :
+. Détection des playlists privées (vs publiques)
+. Association playlist → session appropriée
+. Gestion des erreurs d'accès (403 Forbidden)
+. Support des playlists collaboratives
+. Messages clairs pour l'utilisateur
+
+*Implémentation prévue* (pseudo-code capturé du prompt) :
+```kotlin
+// PrivatePlaylistHandler.kt
+class PrivatePlaylistHandler {
+    fun handlePrivatePlaylistError(
+        playlistUrl: String,
+        session: Session?,
+        error: Throwable
+    ): PrivatePlaylistResult {
+        return when {
+            error.isPrivatePlaylist() && session == null ->
+                PrivatePlaylistResult.UNAUTHENTICATED
+            error.isPrivatePlaylist() && !session.canAccessPlaylist() ->
+                PrivatePlaylistResult.WRONG_ACCOUNT
+            error.isPrivatePlaylist() ->
+                PrivatePlaylistResult.SUCCESS
+            else ->
+                PrivatePlaylistResult.NOT_PRIVATE
+        }
+    }
+}
+```
+
+*Points* : 5 | *Priorité* : 🟡 Basse
+
+=== Prompt US-8 — Playlists Privées (Final, completed)
+
+*Méta* : date=2026-04-15, us=US-8, status=completed, previous_us=US-7
+
+*Fichiers créés* :
+- `PrivatePlaylistException.kt` : Exception avec 6 raisons
+  - `AUTHENTICATION_REQUIRED` : Playlist privée sans session
+  - `WRONG_ACCOUNT` : Session actuelle ne peut pas accéder
+  - `PRIVATE_ACCESSIBLE` : Playlist privée accessible
+  - `NOT_PRIVATE` : Playlist publique
+  - `ACCESS_FORBIDDEN` : Erreur 403
+  - `SIGN_IN_REQUIRED` : Session avec token invalide
+- `PrivatePlaylistHandler.kt` : Gestion des erreurs 403/"private playlist"
+- `PrivatePlaylistHandlerTest.kt` : 21 tests unitaires
+
+*Fichiers modifiés* :
+- `Models.kt` : `PlaylistEntry(url: String, session: String? = null)`
+- `NewpipeManager.kt` : `registerDownloadTask` utilise `playlistEntries` au lieu de `playlistUrls`
+- `DownloadMusicTask.kt` : Ajout `DownloadEntry` avec `sessionHint`, changement de session dynamique pour playlists privées
+- `SessionManager.kt` : Ajout `val sessions: List<Session>` pour accès externe
+- `build.gradle.kts` : Ajout JaCoCo, seuil couverture 15%
+
+*Configuration YAML* :
+```yaml
+# Playlist publique (sans authentification)
+artistes:
+  - name: "Artiste Public"
+    playlists:
+      - url: "https://youtube.com/playlist?list=PUBLIC_ID"
+
+# Playlist privée avec session explicite
+artistes:
+  - name: "Mon Compte"
+    playlists:
+      - url: "https://youtube.com/playlist?list=PRIVATE_ID"
+        session: "compte-principal"
+```
+
+*Scénarios couverts* :
+. ✅ Playlist privée sans session → "authentication required"
+. ✅ Playlist privée avec mauvaise session → "wrong account"
+. ✅ Playlist privée avec bonne session → Téléchargement réussi
+. ✅ Playlist publique sans session → Mode anonyme
+. ✅ Playlist publique avec session → Mode authentifié
+
+*Build & Tests (post US-8)* :
+- Build : ✅ BUILD SUCCESSFUL
+- Tests unitaires : 64 tests (100% pass)
+  - AgeVerificationHandlerTest : 16 tests
+  - AuthErrorHandlerTest : 16 tests
+  - PrivatePlaylistHandlerTest : 21 tests
+  - SessionManagerTest : 10 tests
+  - NewpipePluginTest : 1 test
+- Tests fonctionnels : 5 tests (skip — nécessitent authentification réelle)
+  - YouTubeAuthIntegrationTest : 3 tests
+  - YouTubeIntegrationTest : 2 tests
+- Couverture : 17.3% (≥15% requis) ✅
+  - Handlers : 100% (AgeVerification, PrivatePlaylist, AuthError)
+  - SessionManager : 100%
+  - Classes principales : partiellement (DownloadMusicTask, YouTubeDownloader)
+
+*Backlog* : 32/42 points (76%)
+*Commit* : `feat(US-8): Add private playlist support with multi-session`
+
+=== Prompt US-9 — CLI Interactive (Draft)
+
+*Méta* : date=2026-04-15, us=US-9, status=in_progress, previous_us=ALL
+
+*Contexte* : EPIC Download Auth 100% (37/37). Nouvelle US UX.
+
+*Menu 7 options* :
+```
+╔══════════════════════════════════════════════════════════╗
+║  NewPipe Gradle Plugin - Interface Interactive           ║
+╠══════════════════════════════════════════════════════════╣
+║  1. 🔐 Configurer les sessions OAuth2                    ║
+║  2. 📥 Lancer un téléchargement                          ║
+║  3. 📊 Vérifier l'état des sessions                      ║
+║  4. 📝 Ajouter une playlist                              ║
+║  5. ⚙️  Configuration                                    ║
+║  6. ❓ Aide                                              ║
+║  7. 🚪 Quitter                                           ║
+╚══════════════════════════════════════════════════════════╝
+```
+
+*Sous-menus* :
+- Sessions : Générer client_secrets (1) / Authentifier comptes (2) / Retour (3)
+- Téléchargement : Toutes playlists downloadMusic (1) / Vidéo spécifique (2) / Session spécifique (3) / Retour (4)
+
+*Fichiers à créer* :
+- `InteractiveCliTask.kt` : Tâche principale interactive
+- `InteractiveMenu.kt` : Gestion des menus et affichage
+- `InteractiveCliTaskTest.kt` : Tests unitaires
+- `NewpipeManager.kt` : Enregistrer tâche `newpipeInteractive`
+
+*Points* : 5 | *Priorité* : 🟡 Moyenne
+
+=== Prompt US-9 — CLI Interactive (Archive, complet)
+
+*Méta* : date=2026-04-15, us=US-9, status=in_progress (note: marqué in_progress mais toutes US FAITES)
+
+*Synthèse finale pré-gouvernance* :
+
+*Fichiers par US (tableau complet)* :
+| US | Fichiers Principaux | Tests | Statut |
+|----|---------------------|-------|--------|
+| US-1 | AuthSessionTask.kt | - | ✅ FAIT |
+| US-2 | DownloadMusicTask.kt, SessionManager.kt | - | ✅ FAIT |
+| US-3 | TokenRefresher.kt | - | ✅ FAIT |
+| US-4 | AuthErrorHandler.kt | 17 tests | ✅ FAIT |
+| US-5 | AgeVerificationHandler.kt, AgeRestrictedVideoException.kt | 16 tests | ✅ FAIT |
+| US-6 | SessionStatusTask.kt, SessionMonitor.kt | - | ✅ FAIT |
+| US-7 | YouTubeAuthIntegrationTest.kt | 5 tests | ✅ FAIT |
+| US-8 | PrivatePlaylistHandler.kt, PrivatePlaylistException.kt | 21 tests | ✅ FAIT |
+
+*Total Tests* : 80+ tests unitaires passants
+
+*Métriques finales (avril 2026)* :
+- Lignes de code : ~6000
+- Tests unitaires : 80+
+- Couverture : ≥15%
+- Fichiers Kotlin : 20+
+- Temps de build : ~45s
+- Backlog : 100% ✅
+
+*Historique sessions (chronologie)* :
+- 2026-04-14 : Découpage EPIC en 8 US
+- 2026-04-15 : Debug Build + US-4, US-6, US-7
+- 2026-04-15 : US-5 (Vidéos 18+) + US-8 (Playlists Privées)
+- 2026-04-15 : Backlog 100% complète ✅
+
+*Dernier commit* : `05acfa9 — chore: Remove Kover configuration`
+
+*Prochaines options post-backlog* :
+. Nouvel EPIC : Support autres plateformes (SoundCloud, Bandcamp, Dailymotion)
+. Améliorations UX : CLI interactive, progress bars, configuration simplifiée
+. Améliorations techniques : couverture >50%, refactoring, performance
+. Documentation : guide utilisateur, tutoriels, FAQ
+
+=== Tableau Récapitulatif — Progression Backlog par Prompt
+
+| Prompt | Date | US Traitées | Points FAIT | Total Points | % |
+|--------|------|-------------|-------------|--------------|---|
+| US-4 completion | 2026-04-15 | US-4 | 11 | 37 | 30% |
+| US-7 completion | 2026-04-15 | US-7 | 16 | 37 | 43% |
+| US-3 completion | 2026-04-15 | US-3 | 19 | 37 | 51% |
+| US-6 completion | 2026-04-15 | US-6 | 22 | 37 | 59% |
+| US-5 startup | 2026-04-15 | US-5 en cours | 22 | 37 | 59% |
+| US-8 startup | 2026-04-15 | US-5 FAIT, US-8 pending | 22 | 37 | 59% |
+| US-8 final | 2026-04-15 | US-8 FAIT | 32 | 42 | 76% |
+| US-9 draft | 2026-04-15 | US-9 proposée | 37 | 42 | 88% |
+| US-9 archive | 2026-04-15 | TOUTES FAITES | 42 | 42 | 100% |
+
+=== Sprint Completion (confirmé)
+
+| Sprint | US | Points | Statut |
+|--------|----|--------|--------|
+| Sprint 1 (Consolidation) | US-4, US-7 (+ US-1/US-2 existantes) | 22/22 | 100% ✅ |
+| Sprint 2 (Amélioration UX) | US-3, US-6 | 8/8 | 100% ✅ |
+| Sprint 3 (Avancées) | US-5, US-8 | 13/13 | 100% ✅ |
+| Sprint 4 (Interactive) | US-9 | 5/5 | 100% ✅ |
+
+=== Métriques de Test par Classe (confirmé US-8 final)
+
+| Classe de Test | Nb Tests | Domaine |
+|----------------|----------|---------|
+| AgeVerificationHandlerTest | 16 | Vidéos 18+ |
+| AuthErrorHandlerTest | 16 | Erreurs OAuth2 |
+| PrivatePlaylistHandlerTest | 21 | Playlists privées |
+| SessionManagerTest | 10 | Gestion sessions |
+| NewpipePluginTest | 1 | Bootstrap |
+| YouTubeAuthIntegrationTest | 3 (skip) | Intégration réelle |
+| YouTubeIntegrationTest | 2 (skip) | Intégration réelle |
+| *Total unitaires* | *64* | 100% passants |
+| *Total fonctionnels* | *5* | Skip (credentials requis) |
+
+*Couverture JaCoCo* : 17.3% global, 100% sur tous les Handlers + SessionManager
+
+=== Tous les Commits de l'EPIC Download Auth
+
+| Ordre | Commit | Description |
+|-------|--------|-------------|
+| 1 | (initial) | Code US-1/US-2 déjà existant avant découpage |
+| 2 | `6b6a0ab` | Refactor to remove session-based auth |
+| 3 | (fix) | Correction erreurs compilation Kotlin (NewpipeExtension, NewpipeManager, DownloadMusicTask) |
+| 4 | (US-4) | Gestion des erreurs d'authentification |
+| 5 | (US-7) | Tests d'intégration avec vrais comptes (skippés sans credentials) |
+| 6 | (US-3) | Refresh automatique des tokens |
+| 7 | (US-6) | Monitoring de l'état des sessions |
+| 8 | `feat(US-5)` | Add age-restricted video detection and handling |
+| 9 | `feat(US-8)` | Add private playlist support with multi-session |
+| 10 | `05acfa9` | chore: Remove Kover configuration |
+| 11 | `feat(US-9)` | Add interactive CLI task |

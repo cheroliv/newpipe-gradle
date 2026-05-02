@@ -1,0 +1,14 @@
+= SESSIONS_HISTORY — NewPipe Plugin
+
+[abstract]
+Tableau chronologique de toutes les sessions agent.
+Chargé automatiquement (EAGER) en début de session.
+Mis à jour à chaque fin de session.
+10 dernières sessions uniquement (sliding window).
+
+[cols="1,2,2,4,2", options="header"]
+|===
+| N | Date | Type | Sujet | Score
+| 001 | 2026-05-02 | chore | Extraction documentation parent (.md → .adoc), enrichissement COLD, nettoyage ../ | 9/10
+| 000 | 2026-05-02 | chore | Bootstrap gouvernance agent (Eager/Lazy, Hot/Warm/Cold, encyclopedie) | 8/10
+|===

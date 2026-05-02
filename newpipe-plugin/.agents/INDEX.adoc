@@ -1,0 +1,100 @@
+== Règles Absolues (Exécutif)
+
+=== 0. Environnement de Dev
+
+```bash
+# Depuis newpipe-plugin/ (répertoire courant) :
+./gradlew :newpipe:clean :newpipe:build
+./gradlew :newpipe:test
+./gradlew :newpipe:functionalTest
+./gradlew :newpipe:publishToMavenLocal
+```
+
+*publishToMavenLocal* obligatoire après toute modif de code source du plugin.
+
+=== 1. Git — Interdictions
+
+❌ `git add`, `git commit`, `git push`, `git commit --amend`
+✅ `git status`, `git diff`, `git log`
+
+=== 1b. Fichiers de Configuration — Sûreté
+
+❌ Write écrasant de config, remplacer secrets par placeholders
+✅ `git check-ignore` + `git ls-files` avant modif, backup pré-modification
+
+=== 2. Tests en Fin de Session
+
+❌ Lancer tests sans permission explicite
+
+=== 3. Procédure de Fin de Session (6 étapes obligatoires)
+
+. Archive `.agents/sessions/{N}-{type}-{sujet}.adoc`
+. MAJ `PROMPT_REPRISE.adoc` (N+1, max 70)
+. MAJ `SESSIONS_HISTORY.adoc`
+. MAJ `INDEX.adoc`
+. MAJ `TEST_COVERAGE_ANALYSIS.adoc` (si tests modifiés)
+. MAJ `COMPLETED_TASKS_ARCHIVE_YYYY-MM.adoc`
+. Rotation backup si N%10==0 OU EAGER > 500 lignes
+
+*Checklist OBLIGATOIRE* en fin de session :
+```
+✅ Procédure de fin de session exécutée
+📋 Checklist :
+[✅] 1. Archive session N créée
+[✅] 2. PROMPT_REPRISE.adoc mis à jour pour session N+1
+[✅] 3. SESSIONS_HISTORY.adoc mis à jour
+[✅] 4. INDEX.adoc mis à jour
+[✅] 5. TEST_COVERAGE_ANALYSIS.adoc mis à jour (si applicable)
+[✅] 6. COMPLETED_TASKS_ARCHIVE.adoc mis à jour
+[✅] 7. Backup roté (si applicable)
+```
+
+== Sessions Récentes
+
+|===
+| N | Date | Type | Sujet | Score
+| 001 | 2026-05-02 | chore | Extraction documentation parent (.md→.adoc), enrichissement encyclopédie COLD (1129 lignes), nettoyage ../ | 9/10
+| 000 | 2026-05-02 | chore | Bootstrap gouvernance agent (Eager/Lazy) | 8/10
+|===
+
+_Sessions antérieures_ : le projet `newpipe-gradle/` a 9 sessions pré-gouvernance (US-1 à US-9, 42/42 points) documentées dans `.agents/encyclopedies/LAZY_EAGER_ENCYCLOPEDIE.adoc` (annexe Historique Pré-Gouvernance). La gouvernance Eager/Lazy a été bootstrappée en session 000 (2026-05-02).
+
+== Roadmap
+
+|===
+| EPIC | Titre | Statut | Priorité
+| Auth | Download Authentifié YouTube | 100% (42/42) | ✅
+| LLM | Intégration IA / Migration mp3-organizer | En attente | 🔴
+| Build | Consolidation buildSrc + version catalog | En attente | 🟡
+| Test | Augmenter couverture de tests (>50%) | En attente | 🟠
+===
+
+== Portefeuille de Projets
+
+|===
+| Projet | Session | Dernière activité
+| `plantuml-gradle/plantuml-plugin` | ~138 | EPIC 13 multi-provider
+| `magic_stick` | ~065 | Gouvernance audit + EPICs ISO
+| `bakery-gradle/bakery-plugin` | ~013 | EPIC 4 Firebase contact
+| `cheroliv.com` | ~018 | US-27 Firebase + refonte Hero
+| `jhipster-gradle-plugins` | ~006 | EPIC 5 tests finalisés
+| `openclaw/quizz-benchmark-plugin` | ~002 | Structuration gradle
+| `newpipe-gradle/newpipe-plugin` | 001 | Extraction documentation parent + enrichissement COLD
+|===
+
+== Fichiers (EAGER / LAZY / COLD)
+
+|===
+| Fichier | Type | Taille max
+| `AGENT.adoc` | EAGER | 200 lignes
+| `PROMPT_REPRISE.adoc` | EAGER | 70 lignes
+| `LAZY_EAGER_ESSENTIALS.adoc` | EAGER | 74 lignes
+| `.agents/INDEX.adoc` | EAGER | 200 lignes
+| `.agents/SESSIONS_HISTORY.adoc` | EAGER | 30 lignes
+| `.agents/PROCEDURES.adoc` | LAZY | Illimité
+| `.agents/SESSION_CHECKLIST.adoc` | LAZY | Illimité
+| `.agents/AGENT_SESSION_MANAGER.adoc` | LAZY | Illimité
+| `.agents/TEST_COVERAGE_ANALYSIS.adoc` | LAZY | Illimité
+| `.agents/encyclopedies/*.adoc` | COLD | Jamais auto
+| `.agents/backup/*/` | COLD | Read-only
+|===

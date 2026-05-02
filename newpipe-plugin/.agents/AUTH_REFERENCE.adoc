@@ -1,0 +1,168 @@
+= NewPipe Plugin — Référence Authentification Google OAuth2
+:toc: left
+:toclevels: 2
+:sectnums:
+:icons: font
+
+[abstract]
+*LAZY* — Chargé sur demande par l'agent (besoin de détails sur l'authentification).
+Archive les connaissances de `newpipe-gradle/AUTH_GUIDE.md` (335 lignes).
+
+== Setup Google Cloud Console
+
+=== Étape 1 — Créer Projet Google Cloud
+
+. Aller sur https://console.cloud.google.com/
+. Sélectionner un projet → Nouveau projet
+. Nommer (ex: `newpipe-youtube-downloader` → Créer
+
+=== Étape 2 — Activer YouTube Data API v3
+
+. Tableau de bord → Activer des API et services
+. Rechercher « YouTube Data API v3 » → Activer
+
+=== Étape 3 — Créer Credentials OAuth2
+
+. Identifiants → Créer des identifiants → ID client OAuth
+. Configurer l'écran de consentement :
+  - Type : Externe
+  - Nom : `NewPipe Gradle Plugin`
+  - Email de support : votre email
+. Type d'application : *Application de bureau*
+. Nom : `newpipe-gradle-desktop` → Créer
+. Télécharger le JSON → `client_secrets.json`
+
+=== Étape 4 — Placer le Fichier
+
+```bash
+mkdir -p client_secrets/
+cp ~/Téléchargements/client_secrets.json client_secrets/
+```
+
+*Structure* :
+```
+client_secrets/
+├── client_secrets.json          # Credentials OAuth2
+└── .gitkeep                     # Garder le dossier dans git
+```
+
+== Flux d'Authentification
+
+=== buildSessions
+```bash
+./gradlew buildSessions
+```
+. Lit `client_secrets/client_secrets.json`
+. Génère `sessions.yml`
+. Affiche un code et une URL
+
+=== authSessions
+```bash
+./gradlew authSessions
+```
+Pour chaque session sans `refreshToken` :
+. Affiche un code à 12 chiffres (ex: `ABCD-EFGH-IJKL`)
+. Affiche URL : `https://google.com/device`
+. L'utilisateur va sur l'URL → entre le code → accepte permissions
+. La tâche reçoit le `refreshToken` → stocke dans `sessions.yml`
+
+=== Exemple de Sortie
+
+```
+============================================================
+Checking 2 session(s)…
+============================================================
+
+[compte-principal] Checking…
+
+┌─────────────────────────────────────────────────────────┐
+│  Compte : compte-principal                              │
+│                                                         │
+│  1. Allez sur  : https://google.com/device              │
+│  2. Entrez le code : ABCD-EFGH-IJKL                     │
+│                                                         │
+│  En attente de l'authentification…                      │
+└─────────────────────────────────────────────────────────┘
+
+[compte-principal] ✓ Authenticated — refresh token obtained
+
+[compte-secondaire] Checking…
+[compte-secondaire] ✓ Refresh token present — skipping
+
+============================================================
+✓ sessions.yml updated with new refresh token(s)
+============================================================
+```
+
+== Structure de sessions.yml
+
+```yaml
+sessions:
+  - id: "compte-principal"
+    clientId: "123456789-abcdefghijk.apps.googleusercontent.com"
+    clientSecret: "GOCSPX-abcdefghijklmnop"
+    refreshToken: "1//0abcdefghijklmnop..."
+
+  - id: "compte-secondaire"
+    clientId: "987654321-zyxwvutsrq.apps.googleusercontent.com"
+    clientSecret: "GOCSPX-zyxwvutsrqponmlk"
+    refreshToken: "1//0zyxwvutsrqponmlk..."
+```
+
+*Champs* :
+- `id` : Nom unique de la session (logs)
+- `clientId` : Client ID OAuth2
+- `clientSecret` : Client Secret OAuth2
+- `refreshToken` : Token de rafraîchissement (obtenu via Device Flow)
+
+⚠️ `accessToken` n'est PAS stocké (obtenu à chaque session via refresh)
+⚠️ `refreshToken` valide 1 an (puis nécessite ré-authentification)
+
+== Refresh Automatique des Tokens
+
+=== Comment ça Marche
+
+. *Au démarrage* : `SessionManager` charge `sessions.yml`
+. *Avant chaque requête* :
+  - Vérifie si `accessToken` est expiré
+  - Si oui, utilise `refreshToken` pour en obtenir un nouveau
+  - Si `refreshToken` est expiré, marque la session invalide
+. *Fallback* : Toutes sessions invalides → mode anonyme
+
+=== Durée de Vie
+
+| Token | Durée | Stocké dans |
+|-------|-------|-------------|
+| `accessToken` | 1 heure | Mémoire uniquement |
+| `refreshToken` | 1 an | `sessions.yml` |
+
+=== Quand Ré-authentifier
+
+- *Tous les 12 mois* : `refreshToken` expire
+- *Si révoqué* : L'utilisateur révoque l'accès dans son compte Google
+- *Si erreur 401/403* : Token invalide au moment de la requête
+
+== Dépannage
+
+=== « client_secret invalide »
+*Cause* : Fichier `client_secrets.json` corrompu ou inexistant
+*Solution* : Vérifier `cat client_secrets/client_secrets.json`, recréer dans Google Cloud Console
+
+=== « Token révoqué par l'utilisateur »
+*Cause* : L'utilisateur a révoqué l'accès dans son compte Google
+*Solution* : `./gradlew authSessions`
+
+=== « Quota API dépassé »
+*Cause* : Limite quotidienne YouTube atteinte (1000 requêtes/jour)
+*Solution* : Attendre 24h OU ajouter un deuxième compte Google OU demander augmentation de quota
+
+=== « Toutes sessions invalides »
+*Cause* : Tous les tokens expirés ou révoqués
+*Solution* : `./gradlew authSessions` pour tous les comptes
+
+== Références Externes
+
+- *OAuth2 Device Flow* : https://developers.google.com/identity/protocols/oauth2/limited-input-device
+- *YouTube API Quotas* : https://developers.google.com/youtube/v3/getting-started#quota
+- *Google Cloud Console* : https://console.cloud.google.com/
+- *NewPipeExtractor* : https://github.com/TeamNewPipe/NewPipeExtractor

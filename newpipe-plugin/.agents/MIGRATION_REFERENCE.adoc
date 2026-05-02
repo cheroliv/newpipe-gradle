@@ -1,0 +1,347 @@
+= NewPipe Plugin — Référence Migration & EPICs
+:toc: left
+:toclevels: 3
+:sectnums:
+:icons: font
+
+[abstract]
+*LAZY* — Chargé sur demande par l'agent (besoin de contexte sur la migration IA et les EPICs).
+Archive les connaissances de `newpipe-gradle/MIGRATION_MATRIX.md` + `EPIC_DOWNLOAD_AUTHENTICATED.md`.
+
+== Matrice de Migration — mp3-organizer → newpipe-gradle
+
+[cols="1,3,3,2,2", options="header"]
+|===
+| Composant | mp3-organizer | newpipe-plugin | Status | Priorité
+| *LlmClient* | ✅ | ⏳ | À migrer | 🔴 Haute
+| *PlaylistAgent* | ✅ | ⏳ | À adapter (YouTube) | 🔴 Haute
+| *MaintenanceAgent* | ✅ | ⏳ | À migrer | 🟡 Moyenne
+| *SqlGenerationAgent* | ✅ | ❌ | Non requis | ⚪ N/A
+| *XspfGenerator* | ✅ | ❌ | Optionnel | ⚪ N/A
+| *PlaySmartTask* | ✅ | ⏳ | À adapter | 🟡 Moyenne
+| *PlayArtistTask* | ✅ | ❌ | Non requis | ⚪ N/A
+| *PlayGenreTask* | ✅ | ❌ | Non requis | ⚪ N/A
+| *PostgreSQL* | ✅ | ❌ | Non requis | ⚪ N/A
+| *R2DBC* | ✅ | ❌ | Non requis | ⚪ N/A
+| *VLC Integration* | ✅ | ❌ | Non requis | ⚪ N/A
+| *Version Catalog* | ✅ | ⏳ | À créer | 🔴 Haute
+| *Config YAML* | ❌ | ⏳ | À créer | 🟡 Moyenne
+| *Auth Google* | ❌ | 🔴 | PRIORITÉ 1 | 🔴 Haute
+| *NewPipeExtractor* | ❌ | ✅ | Déjà implémenté | ✅ FAIT
+===
+
+=== Détail des Migrations
+
+==== 1. LlmClient
+*Source* : `mp3-organizer/src/main/kotlin/com/mp3organizer/ai/LlmClient.kt`
+*Destination* : `newpipe/src/main/kotlin/com/cheroliv/newpipe/ai/LlmClient.kt`
+*Adaptation* : Changer package `com.mp3organizer.ai` → `com.cheroliv.newpipe.ai`
+
+==== 2. PlaylistAgent → SessionGeneratorAgent
+*Source* : `mp3-organizer/src/main/kotlin/com/mp3organizer/ai/PlaylistAgent.kt`
+*Destination* : `newpipe/src/main/kotlin/com/cheroliv/newpipe/ai/SessionGeneratorAgent.kt`
+*Adaptations* :
+- PostgreSQL → NewPipeExtractor
+- SQL → Configuration YAML YouTube
+- Contexte DB → Schéma YouTube (filtres, genres, artistes)
+
+```kotlin
+// mp3-organizer : SQL
+val sql = llm.chat("SELECT * FROM tracks WHERE genre = 'jazz'")
+
+// newpipe-gradle : YAML
+val config = llm.chat("filters: { genre: jazz, decade: 1960s, instrument: piano }")
+```
+
+==== 3. PlaySmartTask → GeneratePlaylistTask
+*Source* : `mp3-organizer/src/main/kotlin/com/mp3organizer/tasks/PlaySmartTask.kt`
+*Destination* : `newpipe/src/main/kotlin/com/cheroliv/newpipe/tasks/GeneratePlaylistTask.kt`
+*Adaptations* : DB query → YouTube search via NewPipeExtractor, XSPF → Playlist YouTube, supprimer VLC
+
+==== 4. Version Catalog
+*Source* : `mp3-organizer/gradle/libs.versions.toml`
+*Destination* : `newpipe-gradle/gradle/libs.versions.toml`
+
+```toml
+[versions]
+kotlin = "2.3.20"
+gradle = "9.4.1"
+langchain4j = "1.12.2"
+newpipe-extractor = "0.24.0"
+
+[libraries]
+langchain4j-core = { module = "dev.langchain4j:langchain4j", version.ref = "langchain4j" }
+langchain4j-ollama = { module = "dev.langchain4j:langchain4j-ollama", version.ref = "langchain4j" }
+newpipe-extractor = { module = "com.github.TeamNewPipe:NewPipeExtractor", version.ref = "newpipe-extractor" }
+```
+
+==== 5. Config YAML
+*Inspiration* : `plantuml-gradle/plantuml-plugin/src/main/kotlin/plantuml/PlantumlConfig.kt`
+
+```kotlin
+data class NewpipeConfig(
+    val llm: LlmConfig,
+    val youtube: YouTubeConfig,
+    val output: OutputConfig
+)
+
+data class LlmConfig(
+    val model: String = "gemma4:e4b-it-q4_K_M",
+    val baseUrl: String = "http://localhost:11434",
+    val temperature: Double = 0.7
+)
+
+data class YouTubeConfig(
+    val sessionsPath: String = "sessions.yml",
+    val clientSecretsDir: String = "client_secrets"
+)
+```
+
+=== Roadmap Migration
+
+. *Phase 1 — Foundation* : Créer version catalog, migrer LlmClient, tests
+. *Phase 2 — Agents* : SessionGeneratorAgent, contexte YouTube LLM
+. *Phase 3 — Tâches Gradle* : GeneratePlaylistTask, NewPipeExtractor, tests fonctionnels
+. *Phase 4 — Configuration* : NewpipeConfig, YAML + properties CLI, documentation
+
+=== Commandes Avant/Après Migration
+
+*Avant* (mp3-organizer) :
+```bash
+./gradlew playSmart --args="jazz piano détente"
+./gradlew llmChat --args="quelle est la structure de la DB ?"
+```
+
+*Après* (newpipe-gradle) :
+```bash
+./gradlew suggestSessions --args="jazz piano années 60"
+./gradlew generatePlaylist --args="électro française"
+./gradlew llmChat --args="quelle est l'architecture du plugin ?"
+```
+
+=== Critères d'Acceptation
+
+*LlmClient* :
+```kotlin
+val llm = LlmClient()
+val response = llm.chat("Bonjour")
+assert(response.isNotEmpty())
+```
+
+*SessionGeneratorAgent* :
+```kotlin
+val agent = SessionGeneratorAgent(LlmClient())
+val config = agent.generateConfig("jazz piano années 60")
+assert(config.filters.genre == "jazz")
+assert(config.filters.decade == "1960s")
+```
+
+*GeneratePlaylistTask* :
+```bash
+./gradlew generatePlaylist --args="jazz"
+# Génère un fichier playlist.yml avec vidéos YouTube
+```
+
+== EPIC — Download with NewPipe while Authenticated on YouTube
+
+*Objectif* : Permettre le téléchargement de vidéos YouTube en étant authentifié avec des comptes Google :
+- Accéder aux vidéos réservées aux membres
+- Contourner les restrictions géographiques (geo-blocked)
+- Accéder aux vidéos avec restriction d'âge (age-restricted)
+- Éviter les limitations de taux (rate limiting)
+- Télécharger des playlists privées
+
+=== US-1 — Authentification Initiale des Comptes Google ✅
+*Priorité* : 🔴 Haute | *Points* : 3 | *Date* : 2026-04-14
+
+*En tant que* utilisateur du plugin
+*Je veux* authentifier mes comptes Google via OAuth2 Device Flow
+*Afin de* pouvoir télécharger des vidéos réservées aux membres
+
+*Critères d'acceptation* :
+```bash
+./gradlew authSessions
+# Affiche un code à 12 chiffres et une URL
+# L'utilisateur va sur https://google.com/device
+# Il entre le code et accepte les permissions
+# Résultat : sessions.yml mis à jour avec refreshToken
+# Token jamais affiché dans les logs
+# Support multi-comptes
+```
+
+*Fichiers* : `AuthSessionTask.kt`, `SessionManager.kt`, `Models.kt`
+
+=== US-2 — Téléchargement avec Sessions Authentifiées ✅
+*Priorité* : 🔴 Haute | *Points* : 5 | *Date* : 2026-04-14
+
+*En tant que* utilisateur authentifié
+*Je veux* que le téléchargement utilise automatiquement mes sessions
+*Afin de* télécharger des vidéos réservées aux membres
+
+*Critères* :
+- SessionManager distribue les requêtes en Round-Robin
+- Vidéos membres téléchargées
+- Fallback anonyme si toutes sessions échouent
+
+*Fichiers* : `DownloadMusicTask.kt`, `DownloaderImpl.kt`, `SessionManager.kt`
+
+=== US-3 — Refresh Automatique des Tokens Expirés ✅
+*Priorité* : 🟠 Moyenne | *Points* : 5 | *Date* : 2026-04-15
+
+*En tant que* utilisateur du plugin
+*Je veux* que les tokens d'accès soient rafraîchis automatiquement
+*Afin de* ne pas avoir d'interruption pendant les téléchargements
+
+*Comportement* :
+. Vérifier si `accessToken` est expiré
+. Si oui, refresh via `refreshToken` → nouvel `accessToken`
+. Si refresh échoue (HTTP 400), marquer session invalide
+. Retry avec autre session
+
+*Fichiers* : `TokenRefresher.kt` (créé), `SessionManager.kt` (modifié), `NewpipeManager.kt` (modifié)
+*Tests* : 27 tests unitaires passants
+
+=== US-4 — Gestion des Erreurs d'Authentification ✅
+*Priorité* : 🟠 Moyenne | *Points* : 3 | *Date* : 2026-04-15
+
+*En tant que* utilisateur du plugin
+*Je veux* être informé clairement des problèmes d'authentification
+*Afin de* pouvoir les résoudre rapidement
+
+*Scénarios d'erreur* :
+. refreshToken révoqué → « Exécutez `./gradlew authSessions` »
+. refreshToken expiré → idem
+. client_secret invalide → « Vérifiez `client_secrets/...` »
+. quota API dépassé → bascule automatique sur autre compte
+. compte Google suspendu → session désactivée
+
+*Fichiers* : `AuthErrorHandler.kt` (créé), `SessionManager.kt`, `DownloaderImpl.kt`, `DownloadMusicTask.kt`
+*Tests* : 17 tests AuthErrorHandler + 5 tests SessionManager ajoutés
+
+=== US-5 — Vidéos 18+ avec Vérification d'Âge ✅
+*Priorité* : 🟡 Basse | *Points* : 8 | *Date* : 2026-04-15
+
+*En tant que* utilisateur majeur
+*Je veux* télécharger des vidéos avec restriction d'âge
+*Afin de* pouvoir accéder à tout le contenu YouTube
+
+*Configuration requise* : Compte Google >= 18 ans, OAuth2, acceptation conditions YouTube
+
+*Détection basée sur analyse regex des messages d'erreur* :
+. AGE_VERIFICATION_REQUIRED
+. SIGN_IN_REQUIRED
+. MINOR_ACCOUNT
+. AGE_GATE_UNCIRCUMVENTABLE
+. NOT_AGE_RESTRICTED
+
+*Fichiers* : `AgeVerificationHandler.kt` (210 lignes), `AgeRestrictedVideoException.kt` (43 lignes)
+*Tests* : 16 tests unitaires passants
+
+=== US-6 — Monitoring de l'État des Sessions ✅
+*Priorité* : 🟡 Basse | *Points* : 3 | *Date* : 2026-04-15
+
+*En tant que* utilisateur du plugin
+*Je veux* voir l'état de mes sessions authentifiées
+*Afin de* savoir quand ré-authentifier
+
+```bash
+./gradlew sessionStatus
+```
+
+*Affichage tableau* :
+- Statut : ✓ Actif / ⚠️ Token expiré
+- Token expires : date
+- Requêtes aujourd'hui : N/1000
+- Dernière utilisation
+
+*Fichiers* : `SessionStatusTask.kt`, `SessionMonitor.kt`
+*Tests* : 5 tests unitaires
+
+=== US-7 — Tests d'Intégration avec Vrais Comptes ✅
+*Priorité* : 🟠 Moyenne | *Points* : 5 | *Date* : 2026-04-15
+
+*En tant que* développeur du plugin
+*Je veux* des tests d'intégration avec de vrais comptes YouTube
+*Afin de* valider le workflow d'authentification en conditions réelles
+
+*Tests* (tag `@Tag("real-youtube")`) :
+. download member-only video with authenticated session
+. refresh expired token automatically
+. fallback to anonymous when all sessions invalid
+
+*Variables env requises* : `TEST_YOUTUBE_CLIENT_ID`, `TEST_YOUTUBE_CLIENT_SECRET`, `TEST_YOUTUBE_REFRESH_TOKEN`
+
+*Fichiers* : `YouTubeAuthIntegrationTest.kt`, `test-sessions.yml`
+
+=== US-8 — Playlists Privées ✅
+*Priorité* : 🟡 Basse | *Points* : 5 | *Date* : 2026-04-15
+
+*En tant que* utilisateur authentifié
+*Je veux* télécharger mes playlists privées YouTube
+*Afin de* récupérer ma musique personnelle
+
+*Configuration musics.yml* :
+```yaml
+playlists:
+  - "https://www.youtube.com/playlist?list=PRIVATE_ID"
+    session: "compte-principal"
+```
+
+*Scénarios* : playlist privée avec bonne session → succès, mauvaise session → message, sans session → message
+
+*Fichiers* : `PrivatePlaylistHandler.kt`, `PrivatePlaylistException.kt` (6 raisons de détection)
+*Tests* : 21 tests unitaires passants
+
+=== US-9 — CLI Interactive ✅
+*Priorité* : 🟡 Basse | *Points* : 5 | *Date* : 2026-04-15
+
+```bash
+./gradlew newpipeInteractive
+```
+
+*Menu 7 options* : sessions, téléchargement, status, playlists, config, aide, quitter
+*Bordures Unicode* dans l'affichage
+
+*Fichier* : `InteractiveCli.kt`
+
+== Résumé Backlog
+
+[cols="1,2,2,2", options="header"]
+|===
+| US | Titre | Points | Statut
+| US-1 | Authentification Initiale | 3 | ✅ FAIT
+| US-2 | Téléchargement Authentifié | 5 | ✅ FAIT
+| US-3 | Refresh Automatique Tokens | 5 | ✅ FAIT
+| US-4 | Gestion Erreurs Auth | 3 | ✅ FAIT
+| US-5 | Vidéos 18+ | 8 | ✅ FAIT
+| US-6 | Monitoring Sessions | 3 | ✅ FAIT
+| US-7 | Tests Intégration | 5 | ✅ FAIT
+| US-8 | Playlists Privées | 5 | ✅ FAIT
+| US-9 | CLI Interactive | 5 | ✅ FAIT
+| *Total* | | *42* | *100%* ✅
+===
+
+== Roadmap
+
+=== Sprint 1 — Consolidation (2026-04-14 → 2026-04-21) ✅
+_US-1, US-2, US-4, US-7_ — Rendre l'existant fiable et testable
+*Livrables* : AuthErrorHandler.kt, messages erreur français + emoji, tests intégration real-youtube
+
+=== Sprint 2 — Amélioration UX (2026-04-21 → 2026-04-28) ✅
+_US-3, US-6_ — Réduire la maintenance manuelle
+*Livrables* : TokenRefresher.kt refresh automatique, SessionStatusTask.kt affichage tableau
+
+=== Sprint 3 — Fonctionnalités Avancées (2026-04-28 → 2026-05-05) ✅
+_US-5, US-8_ — Support cas d'usage avancés
+*Livrables* : AgeVerificationHandler.kt, PrivatePlaylistHandler.kt, tests vrais contenus
+
+=== Sprint 4 — CLI Interactive (2026-04-15) ✅
+_US-9_ — 7 options menu interactif
+*Livrables* : InteractiveCli.kt
+
+== Composants Non Requis pour newpipe-gradle
+
+- *SQL Generation Agent* : NewPipe n'utilise pas de DB
+- *XSPF Generator* : Format VLC non requis (MP3 direct)
+- *VLC Integration* : Focalisation téléchargement
+- *PostgreSQL / R2DBC* : Aucune DB dans newpipe-gradle

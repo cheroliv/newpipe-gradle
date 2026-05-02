@@ -1,0 +1,241 @@
+= NewPipe Plugin — Référence Tests
+:toc: left
+:toclevels: 2
+:sectnums:
+:icons: font
+
+[abstract]
+*LAZY* — Chargé sur demande par l'agent (besoin de patterns de test).
+Archive les connaissances de `newpipe-gradle/TESTING_STRATEGY.md` (458 lignes).
+
+== Stratégie — 3 Niveaux
+
+. *Tests Unitaires* : Mock des dépendances externes (Ollama, YouTube API)
+. *Tests Fonctionnels* : Tests des tâches Gradle avec TestKit
+. *Tests d'Intégration* : Tests avec vrais services (Ollama, YouTube)
+
+== Tests Unitaires
+
+=== Pattern — WireMock pour Ollama
+
+[source,kotlin]
+----
+@ExtendWith(MockKExtension::class)
+class LlmClientTest {
+    @Test
+    fun `returns response from Ollama`() = runTest {
+        wiremock.stubFor(
+            post("/api/chat")
+                .willReturn(aResponse().withStatus(200)
+                    .withBody("""{"message": {"content": "Hello"}}"""))
+        )
+        val llm = LlmClient(baseUrl = wiremock.baseUrl())
+        val response = llm.chat("test")
+        assertThat(response).isEqualTo("Hello")
+    }
+}
+----
+
+*Dépendances* :
+```kotlin
+testImplementation("com.github.tomakehurst:wiremock:3.0.1")
+testImplementation("io.mockk:mockk:1.13.9")
+testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.8.0")
+```
+
+=== Pattern — Mock NewPipeExtractor
+
+[source,kotlin]
+----
+class YouTubeDownloaderTest {
+    @Test
+    fun `extracts video info from URL`() = runTest {
+        wiremock.stubFor(
+            get(urlPathMatching("/watch.*"))
+                .willReturn(aResponse().withBody(mockResponse))
+        )
+        val downloader = YouTubeDownloader()
+        val info = downloader.getVideoInfo("https://youtube.com/watch?v=test")
+        assertThat(info.title).isEqualTo("Test Video")
+        assertThat(info.uploaderName).isEqualTo("Test Channel")
+    }
+}
+----
+
+== Tests Fonctionnels
+
+=== Pattern — Gradle TestKit
+
+[source,kotlin]
+----
+@TempDir
+lateinit var testProjectDir: File
+
+@Test
+fun `buildSessions creates session file`() {
+    File(testProjectDir, "settings.gradle.kts").writeText("")
+    File(testProjectDir, "build.gradle.kts").writeText("""
+        plugins { id("com.cheroliv.newpipe") version "0.0.4" }
+        newpipe { configPath = file("musics.yml").absolutePath }
+    """)
+
+    val result = GradleRunner.create()
+        .withProjectDir(testProjectDir)
+        .withArguments("buildSessions")
+        .withPluginClasspath()
+        .build()
+
+    assertThat(result.task(":buildSessions")).isNotNull
+    assertThat(result.output).contains("BUILD SUCCESSFUL")
+}
+----
+
+*Dépendance* : `testImplementation("org.gradle:gradle-test-kit:8.5")`
+
+=== Pattern — Scénarios Cucumber BDD
+
+```gherkin
+Feature: OAuth2 Authentication
+
+  Scenario: Successful Device Flow authentication
+    Given sessions.yml contains account without refreshToken
+    When I run ./gradlew authSessions
+    And I complete Device Flow on google.com/device
+    Then sessions.yml contains refreshToken
+    And token is not displayed in logs
+
+  Scenario: Skip already authenticated account
+    Given sessions.yml contains account with refreshToken
+    When I run ./gradlew authSessions
+    Then account is marked "✓ Refresh token present — skipping"
+    And sessions.yml is not modified
+```
+
+== Tests d'Intégration
+
+=== Pattern — Tag pour Tests Réels
+
+[source,kotlin]
+----
+@Tag("real-youtube")
+class YouTubeAuthIntegrationTest {
+
+    @Test
+    fun `download member-only video with authenticated session`() {
+        val refreshToken = System.getenv("TEST_YOUTUBE_REFRESH_TOKEN")
+            ?: throw SkipTestException("No refresh token")
+
+        val session = Session(
+            id = "test-account",
+            clientId = System.getenv("TEST_YOUTUBE_CLIENT_ID"),
+            clientSecret = System.getenv("TEST_YOUTUBE_CLIENT_SECRET"),
+            refreshToken = refreshToken
+        )
+
+        val manager = SessionManager(listOf(session))
+        val downloader = DownloaderImpl(manager)
+        val info = downloader.getVideoInfo("https://youtube.com/watch?v=MEMBER_ONLY_ID")
+
+        assertThat(info).isNotNull
+        assertThat(info.isMemberOnly).isTrue()
+    }
+
+    @Test
+    fun `refresh expired token automatically`() {
+        val session = Session(
+            id = "test-account",
+            clientId = "...", clientSecret = "...", refreshToken = "...",
+            accessTokenExpiry = Instant.now().minusSeconds(3600) // Expired
+        )
+        val manager = SessionManager(listOf(session))
+        manager.next() // Triggers refresh
+        assertThat(session.accessToken).isNotBlank()
+        assertThat(session.accessTokenExpiry).isAfter(Instant.now())
+    }
+}
+----
+
+=== Configuration Exclusion CI
+
+```kotlin
+tasks.test {
+    useJUnitPlatform {
+        excludeTags("real-youtube", "real-ollama")
+    }
+}
+
+tasks.register<Test>("integrationTest") {
+    useJUnitPlatform {
+        includeTags("real-youtube", "real-ollama")
+    }
+    environment("TEST_YOUTUBE_CLIENT_ID", project.findProperty("youtube.clientId"))
+    environment("TEST_YOUTUBE_CLIENT_SECRET", project.findProperty("youtube.clientSecret"))
+    environment("TEST_YOUTUBE_REFRESH_TOKEN", project.findProperty("youtube.refreshToken"))
+}
+```
+
+=== Skip si Prérequis Manquants
+
+```kotlin
+class SkipTestException(message: String) : Exception(message)
+
+fun ollamaIsRunning(): Boolean {
+    return try {
+        URL("http://localhost:11434/api/tags").openStream().use { true }
+    } catch (e: Exception) { false }
+}
+```
+
+== Tests par Composant
+
+=== AuthSessionTask
+- Skip comptes avec refreshToken existant
+- Pas de Device Flow déclenché si déjà authentifié
+
+=== SessionManager
+- Round-Robin équitable entre N sessions
+- Wrap-around (session 4 retourne session 1)
+- Exclusion des sessions marquées invalides
+
+=== DownloadMusicTask
+- Téléchargement vidéo unique
+- Mock YouTubeDownloader pour tests isolés
+- Vérification métadonnées MP3
+
+== Coverage (Kover — Configuré mais retiré)
+
+```kotlin
+plugins { id("org.jetbrains.kotlinx.kover") version "0.7.6" }
+
+kover {
+    reports { total { html { onCheck = true } } }
+    verify { rule { minBound(80, CoverageUnit.LINE) } }
+}
+```
+
+⚠️ Kover a été retiré de la config actuelle (commit 05acfa9). JaCoCo en remplacement.
+
+== Commandes de Test
+
+```bash
+./gradlew :newpipe:test                         # Tests unitaires
+./gradlew :newpipe:test --tests "*Test"         # Tests unitaires seulement
+./gradlew :newpipe:functionalTest               # Tests fonctionnels
+./gradlew :newpipe:integrationTest              # Tests intégration (credentials requis)
+
+# Avec tag spécifique
+./gradlew :newpipe:test --tests "*YouTubeAuthIntegrationTest*" --include-tags "real-youtube"
+```
+
+== Checklist Validation
+
+*Avant commit* :
+- ✅ Tests unitaires passent
+- ✅ Coverage >= 80% (cible, pas encore atteint)
+- ✅ Tests fonctionnels passent
+- ✅ Aucun secret dans les tests (vérifier .gitignore)
+
+*Avant merge* :
+- ✅ Tests intégration passent (si credentials disponibles)
+- ✅ Performance acceptable (< 5 min tous les tests)
+- ✅ Documentation mise à jour

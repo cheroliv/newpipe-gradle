@@ -1,0 +1,126 @@
+= AGENT_SESSION_MANAGER — Règles de Gestion
+:toc: left
+:sectnums:
+:icons: font
+
+[abstract]
+Ce fichier contient les règles de gestion des fichiers de gouvernance, les seuils d'alerte et les instructions pour l'agent.
+*LAZY* — Chargé sur demande (alerte seuil dépassé, maintenance structure).
+
+== Règles de Gestion
+
+=== Actifs
+
+|===
+| Fichier | Taille max | Alerte
+| `PROMPT_REPRISE.adoc` | 70 lignes | > 70 lignes → élaguer
+| `.agents/INDEX.adoc` | 200 lignes | > 200 lignes → rotation backup
+| `.agents/sessions/` | 10 fichiers | > 10 fichiers → rotation backup
+| EAGER cumulé | 500 lignes | > 500 → rotation backup
+===
+
+=== Procédure d'Archivage (6 étapes)
+
+. *Créer* `.agents/sessions/{N}-{type}-{sujet}.adoc`
+. *MAJ* `PROMPT_REPRISE.adoc` pour N+1 (max 70 lignes)
+. *MAJ* `.agents/SESSIONS_HISTORY.adoc` (ajouter ligne N)
+. *MAJ* `.agents/INDEX.adoc` (date, session, roadmap)
+. *Optionnel* : MAJ `TEST_COVERAGE_ANALYSIS.adoc` (si tests modifiés)
+. *MAJ* `.agents/archives/COMPLETED_TASKS_ARCHIVE_YYYY-MM.adoc`
+
+=== Classification des Types
+
+|===
+| Type | Mots-clés
+| `debug` | "bug", "erreur", "corrige", "fix"
+| `feature` | "crée", "ajoute", "implémente", "US"
+| `refactor` | "refactore", "nettoie", "renomme"
+| `docs` | "documente", "README", "explique"
+| `chore` | "init", "bootstrap", "setup", "migration"
+| `test` | "test", "couverture", "TDD"
+===
+
+=== Template de Session
+
+[source,asciidoc]
+----
+= Session {N} — {Titre} ({Type})
+
+== Contexte
+*Projet* : newpipe-plugin
+*Module* : newpipe
+
+== État Initial
+*Build* : ✅ / ❌
+*Tests* : {passants}/{total}
+
+== Actions
+. [Action]
+
+== Résultats
+*Fichiers créés* :
+- `...`
+*Fichiers modifiés* :
+- `...`
+
+== Build & Tests Finaux
+*Build* : ✅ / ❌
+*Tests* : {passants}/{total}
+
+== Prochaine Session
+*Priorité* : ...
+----
+
+=== Maintenance INDEX.adoc
+
+. Ajouter session au tableau « Sessions Récentes » (sliding window 10 sessions)
+. Mettre à jour la roadmap (statuts EPIC)
+. Vérifier portefeuille projets (tous les 6 projets)
+
+=== Instructions Agent
+
+*Début session* :
+. Charger fichiers EAGER (auto via opencode.json)
+. Lire `PROMPT_REPRISE.adoc` pour mission N
+. Consulter `INDEX.adoc` pour roadmap
+. Proposer l'option la plus prioritaire
+
+*Milieu session* :
+. 1 fichier à la fois
+. `publishToMavenLocal` après chaque modif de .kt
+. Si > 3 fichiers modifiés → proposer split de session
+
+*Fin session* :
+. Détecter trigger utilisateur
+. Exécuter 6 étapes *silencieusement*
+. Afficher checklist finale
+
+== Seuils d'Alerte
+
+|===
+| Alerte | Seuil | Action
+| PROMPT_REPRISE lourd | > 70 lignes | Élaguer sections non critiques
+| INDEX lourd | > 200 lignes | Déclencher rotation backup
+| Sessions directory plein | > 20 fichiers | Déclencher rotation backup
+| EAGER total lourd | > 500 lignes | Déclencher rotation backup
+===
+
+== Structure de Stockage
+
+```
+.agents/
+├── INDEX.adoc                  (EAGER — règles + roadmap)
+├── SESSIONS_HISTORY.adoc       (EAGER — 10 dernières)
+├── PROCEDURES.adoc             (LAZY — templates)
+├── SESSION_CHECKLIST.adoc      (LAZY — triggers)
+├── AGENT_SESSION_MANAGER.adoc  (LAZY — ce fichier)
+├── TEST_COVERAGE_ANALYSIS.adoc (LAZY — suivi tests)
+├── encyclopedies/              (COLD — jamais auto)
+│   └── LAZY_EAGER_ENCYCLOPEDIE.adoc
+├── archives/                   (LAZY — tâches terminées)
+│   └── COMPLETED_TASKS_ARCHIVE_YYYY-MM.adoc
+├── backup/                     (COLD — vagues froides)
+│   └── Y20XX-sessions-X-Y/
+└── sessions/                   (LAZY — archives sessions)
+    └── {N}-{type}-{sujet}.adoc
+```

@@ -1,0 +1,79 @@
+= SESSION_CHECKLIST — Quand Changer de Session
+:icons: font
+
+[abstract]
+Ce fichier définit les métriques d'une session idéale et les signes qu'il faut changer de session.
+*LAZY* — Consulté quand l'agent ou l'utilisateur hésite sur la transition.
+
+== Session Idéale
+
+|===
+| Métrique | Cible
+| Durée | 15-30 minutes
+| Fichiers modifiés | 1-3 maximum
+| Échanges LLM | 5-10 messages
+| Contexte tokens | < 50k
+===
+
+== Signes qu'il Faut Changer de Session
+
+. *Le LLM répète des erreurs déjà corrigées* → contexte saturé
+. *Plus de 3 fichiers modifiés en parallèle* → scope trop large
+. *Conversation > 50 messages* → attention diluée
+. *Plus de 3 échanges sans progrès* → enlisement
+. *Contexte > 70k tokens* → zone de dégradation imminente
+. *L'agent propose de modifier newpipe/ ET buildSrc/ simultanément* → violation de scope
+
+== Règle d'Or
+
+*Mieux vaut 5 sessions de 20 minutes qu'une session de 2 heures avec debugging chaos.*
+
+== Début de Session
+
+*Startup prompt* (envoyé automatiquement au début de session par l'utilisateur) :
+
+```
+Reprends le contexte du projet via les fichiers de gouvernance (AGENT.adoc, PROMPT_REPRISE.adoc, LAZY_EAGER_ESSENTIALS.adoc, INDEX.adoc) et propose le point de départ.
+```
+
+=== Vérifications
+
+```bash
+# Vérifier le build
+./gradlew :newpipe:build
+
+# Voir l'état des sessions YouTube
+./gradlew sessionStatus
+
+# Voir le backlog (inline dans AGENT.adoc depuis session 000)
+# Consulter AGENT.adoc section Backlog — EPICs
+```
+
+== Fin de Session — Procédure
+
+. *Déclencher* : mots-clés « fin de session », « on arrête là »
+. *Agent* : exécute les 6 étapes silencieusement
+. *Agent* : affiche la checklist de confirmation
+. *Utilisateur* : valide la checklist
+
+== Types de Sessions
+
+|===
+| Type | Détection | Méthodologie proposée
+| *Création* | "crée", "ajoute", "implémente" | TDD : test → code → refactor
+| *Debug* | "bug", "erreur", "corrige" | Reproduire → Diagnostiquer → Fixer → Tester
+| *Analyse* | "analyse", "audite", "review" | Explorer → Documenter → Proposer
+| *Refactoring* | "refactore", "nettoie", "renomme" | Identifier → Extraire → Tester régression
+| *Documentation* | "documente", "explique", "README" | Structurer → Rédiger → Relire
+| *Test* | "test", "couverture", "TDD" | Rouge → Vert → Refactor
+===
+
+== Anti-Patterns à Éviter
+
+. *Agent sans opencode.json* — AGENT.adoc jamais chargé
+. *Trop d'agents trop tôt* — créer des agents spécialisés seulement quand le domaine dépasse 100 lignes
+. *PROMPT_REPRISE fantôme* — mission dérivée, PROMPT ne reflète plus la réalité
+. *Archive vide* — template rempli de placeholders "TODO"
+. *Portefeuille fantôme* — nouveau projet créé mais pas ajouté aux INDEX.adoc des autres projets
+. *Redondance cachée* — backlog copié-collé, AGENT.adoc et INDEX.adoc divergent (INDEX = source de vérité)
+. *Session trop longue* — 2h, 85 messages, 12 fichiers → le LLM répète les erreurs corrigées

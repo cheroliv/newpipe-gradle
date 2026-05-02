@@ -1,0 +1,302 @@
+= NewPipe Plugin — Directives Agent
+:toc: left
+:toclevels: 3
+:sectnums:
+:icons: font
+
+[CAUTION]
+====
+*ARRÊT OBLIGATOIRE* avant `rm`, `Write` écrasant, toute suppression destructive :
+
+1. LIRE le fichier cible en entier
+2. VÉRIFIER `git check-ignore` et `git ls-files`
+3. DEMANDER confirmation explicite
+4. ATTENDRE un « oui » ou « vas-y »
+====
+
+== Projet
+
+*Nom* : `newpipe-plugin`
+*Package* : `com.cheroliv.newpipe`
+*Stack* : Kotlin 2.3.20, Gradle 9.4.1, LangChain4j 1.12.2, NewPipeExtractor v0.24.0
+*Modèle IA* : deepseek-v4-pro (via Ollama cloud, CSA+HCA, 1M contexte)
+*Documentation* : AsciiDoc
+*Racine de travail* : `newpipe-plugin/`
+
+[CAUTION]
+====
+*CIBLES DE BUILD* — Depuis `newpipe-plugin/` (répertoire courant) :
+
+```bash
+./gradlew :newpipe:clean :newpipe:build
+./gradlew :newpipe:test
+./gradlew :newpipe:functionalTest
+./gradlew :newpipe:publishToMavenLocal
+```
+
+Ou forme courte (Gradle résout automatiquement sur l'unique sous-projet `:newpipe`) :
+
+```bash
+./gradlew build
+./gradlew test
+./gradlew publishToMavenLocal
+```
+====
+
+== Règles Absolues
+
+=== 0. Build & Publication
+
+*publishToMavenLocal obligatoire* après chaque modification du code source du plugin.
+Toute modification dans `newpipe/newpipe/src/main/kotlin/` → republier le JAR local avant de tester.
+
+```bash
+./gradlew :newpipe:publishToMavenLocal
+```
+
+=== 1. Git — Interdictions Formelles
+
+❌ `git add`, `git commit`, `git push`, `git commit --amend`
+✅ Lecture seule autorisée : `git status`, `git diff`, `git log`
+
+Seul l'utilisateur gère Git après validation humaine.
+
+=== 1b. Fichiers de Configuration — Règle Absolue de Sûreté
+
+*NÉE DE L'INCIDENT site.yml (bakery-plugin, session 2)* :
+
+❌ *NE JAMAIS* écraser un fichier de config avec un `Write` complet quand un `Edit` partiel suffit
+❌ *NE JAMAIS* remplacer des valeurs sensibles (tokens, secrets) par des valeurs factices ou placeholders
+✅ Vérifier `git check-ignore` et `git ls-files` *avant* toute modification
+✅ Utiliser le motif de backup pré-modification copié de `.agents/PROCEDURES.adoc`
+
+Fichiers critiques :
+- `local.properties` (secrets OAuth)
+- `gradle.properties` (configuration build)
+- `sessions.yml`, `musics.yml` (données utilisateur)
+
+=== 2. Tests en Fin de Session — Interdiction Formelle
+
+❌ *NE JAMAIS* lancer de tests en procédure de fin de session sans permission explicite.
+La procédure de fin de session archive le contexte, elle ne valide pas le code.
+
+=== 3. Sécurité des Tokens — Interdiction de Log
+
+*PRINCIPE* : Les tokens API, mots de passe, refresh tokens ne doivent *JAMAIS* apparaître dans la sortie terminal.
+
+❌ *NE JAMAIS* passer un token en argument visible d'une commande shell
+❌ *NE JAMAIS* afficher le contenu de `local.properties`, `sessions.yml` ou tout fichier contenant des secrets
+✅ Utiliser stdin pour l'injection de tokens
+
+=== 4. Dépendance au Modèle IA
+
+Le contexte EAGER (~800 lignes) est calibré pour *DeepSeek-V4-Pro* (stable jusqu'à 128K tokens, CSA+HCA).
+Ne *PAS* remplacer par un modèle MLA pur (Kimi K2.6) qui dégrade au-delà de 60K tokens — voir article 0112.
+
+DeepSeek-V4-Pro a été sélectionné après 13 sessions de test comparatif face à Kimi K2.6 et GLM-5.1.
+
+== Structure du Projet
+
+```
+newpipe-plugin/
+├── opencode.json
+├── AGENT.adoc
+├── PROMPT_REPRISE.adoc
+├── LAZY_EAGER_ESSENTIALS.adoc
+├── settings.gradle.kts
+├── README.adoc
+├── README_fr.adoc
+├── newpipe/
+│   ├── build.gradle.kts
+│   └── src/main/kotlin/com/cheroliv/newpipe/
+│       ├── DownloaderPlugin.kt
+│       ├── NewpipeManager.kt
+│       ├── YouTubeDownloader.kt
+│       ├── AuthSessionTask.kt          ← Auth Google OAuth2
+│       ├── BuildSessionsTask.kt        ← Construction sessions
+│       ├── SessionManager.kt           ← Round-Robin + refresh
+│       ├── DownloadMusicTask.kt        ← Téléchargement
+│       ├── Mp3Converter.kt             ← Conversion MP3
+│       ├── Models.kt                   ← Data classes
+│       ├── TokenRefresher.kt           ← Refresh OAuth2
+│       ├── AuthErrorHandler.kt         ← Erreurs auth
+│       ├── AgeVerificationHandler.kt   ← Vidéos 18+
+│       ├── SessionStatusTask.kt        ← Monitoring
+│       ├── SessionMonitor.kt
+│       ├── PrivatePlaylistHandler.kt   ← Playlists privées
+│       ├── InteractiveCli.kt           ← CLI interactive
+│       └── ai/                         ← Module IA
+│           ├── LlmClient.kt
+│           ├── SessionGeneratorAgent.kt
+│           └── MaintenanceAgent.kt
+└── .agents/
+    ├── INDEX.adoc
+    ├── SESSIONS_HISTORY.adoc
+    ├── PROCEDURES.adoc
+    ├── SESSION_CHECKLIST.adoc
+    ├── AGENT_SESSION_MANAGER.adoc
+    ├── TEST_COVERAGE_ANALYSIS.adoc
+    ├── encyclopedies/
+    ├── archives/
+    ├── backup/
+    └── sessions/
+```
+
+== Gestion du Contexte — LAZY/EAGER
+
+[cols="1,1,2", options="header"]
+|===
+| Fichier | Type | Rôle
+| `AGENT.adoc` | EAGER | Règles absolues, architecture, backlog
+| `PROMPT_REPRISE.adoc` | EAGER | Mission session N (max 70 lignes)
+| `LAZY_EAGER_ESSENTIALS.adoc` | EAGER | Principes stratégie (~74 lignes)
+| `.agents/INDEX.adoc` | EAGER | Règles exécutives + roadmap + sessions
+| `.agents/SESSIONS_HISTORY.adoc` | EAGER | Tableau chronologique (10 dernières)
+| `.agents/PROCEDURES.adoc` | LAZY | Templates 6 étapes + politique chargement
+| `.agents/SESSION_CHECKLIST.adoc` | LAZY | Déclencheurs de transition
+| `.agents/AGENT_SESSION_MANAGER.adoc` | LAZY | Règles gestion sessions, alertes
+| `.agents/TEST_COVERAGE_ANALYSIS.adoc` | LAZY | Suivi des tests par classe
+| `.agents/encyclopedies/*.adoc` | COLD | Connaissance exhaustive (jamais auto)
+| `.agents/backup/*/` | COLD | Vagues froides (snapshots N-10 et antérieur)
+|===
+
+=== Hot/Warm/Cold
+
+*Hot (EAGER)* — 10 dernières sessions, PROMPT_REPRISE, règles, ~800 lignes
+*Warm (LAZY)* — Références, procédures, agents spécialisés
+*Cold (backup/)* — Vagues froides identiques (copie intégrale, jamais transformée)
+*Cold (encyclopedies/)* — Connaissance thématique exhaustive, humain seulement
+
+=== Rotation Backup
+
+Déclencheurs :
+. *Auto* : N % 10 == 0 (toutes les 10 sessions)
+. *Seuil* : EAGER cumulé > 500 lignes
+. *Manuel* : mot-clé « rotation backup »
+
+La rotation crée `backup/Y20XX-sessions-X-Y/` avec copie intégrale de INDEX + HISTORY + COMPLETED_TASKS + sessions/, puis tronque les actifs à 10 sessions.
+
+== Commandes Essentielles
+
+=== Build & Test
+```bash
+./gradlew :newpipe:clean :newpipe:build
+./gradlew :newpipe:test
+./gradlew :newpipe:functionalTest
+./gradlew :newpipe:publishToMavenLocal
+```
+
+=== Authentification Google
+```bash
+./gradlew buildSessions
+./gradlew authSessions
+./gradlew sessionStatus
+```
+
+=== Téléchargement
+```bash
+./gradlew downloadMusic --url="VIDEO_ID"
+./gradlew downloadMusic
+./gradlew newpipeInteractive
+```
+
+== Authentification Google — Contexte
+
+*Setup* :
+. Créer projet Google Cloud Console
+. Activer YouTube Data API v3
+. Créer credentials OAuth2 « Desktop app »
+. Placer `client_secrets.json` dans `client_secrets/`
+
+*Flux* :
+```
+buildSessions → authSessions (Device Flow) → sessions.yml enrichi → downloadMusic
+```
+
+*Sécurité* :
+- `sessions.yml` et `client_secrets/` dans `.gitignore`
+- `accessToken` en mémoire uniquement, jamais persisté
+- `refreshToken` valable 1 an
+
+== Backlog — EPICs
+
+.EPIC : Download with NewPipe while Authenticated on YouTube
+|===
+| US | Titre | Points | Statut
+| US-1 | Authentification Initiale | 3 | ✅ FAIT
+| US-2 | Téléchargement Authentifié | 5 | ✅ FAIT
+| US-3 | Refresh Automatique Tokens | 5 | ✅ FAIT
+| US-4 | Gestion Erreurs Auth | 3 | ✅ FAIT
+| US-5 | Vidéos 18+ | 8 | ✅ FAIT
+| US-6 | Monitoring Sessions | 3 | ✅ FAIT
+| US-7 | Tests Intégration | 5 | ✅ FAIT
+| US-8 | Playlists Privées | 5 | ✅ FAIT
+| US-9 | CLI Interactive | 5 | ✅ FAIT
+|===
+
+*Total* : 42/42 points (100%) ✅
+
+.EPIC : Intégration LLM & IA
+|===
+| Composant | Statut
+| LlmClient | ✅ mp3-organizer → à migrer
+| SessionGeneratorAgent | ⏳ À créer
+| MaintenanceAgent | ✅ mp3-organizer → à migrer
+| Version Catalog | ⏳ À créer
+|===
+
+Documentation intégrée dans `.agents/` — voir REFERENCES ci-dessous. Historique complet des sessions archivé dans `.agents/encyclopedies/LAZY_EAGER_ENCYCLOPEDIE.adoc` (COLD).
+
+== Procédure de Fin de Session
+
+Mots-clés déclencheurs : « fin de session », « on arrête là », « je quitte », « fin de la session ».
+
+L'agent exécute *silencieusement* les 6 étapes, puis affiche la checklist de confirmation.
+
+. Créer `.agents/sessions/{N}-{type}-{sujet-kebab-case}.adoc`
+. Mettre à jour `PROMPT_REPRISE.adoc` pour session N+1
+. Mettre à jour `.agents/SESSIONS_HISTORY.adoc`
+. Mettre à jour `.agents/INDEX.adoc`
+. Mettre à jour `.agents/TEST_COVERAGE_ANALYSIS.adoc` (si tests modifiés)
+. Mettre à jour `.agents/archives/COMPLETED_TASKS_ARCHIVE_YYYY-MM.adoc`
+. Optionnel : rotation backup si N%10==0 OU EAGER cumulé > 500 lignes
+
+Checklist de confirmation :
+```
+✅ Procédure de fin de session exécutée
+📋 Checklist :
+[✅] 1. Archive session N créée
+[✅] 2. PROMPT_REPRISE.adoc mis à jour pour session N+1
+[✅] 3. SESSIONS_HISTORY.adoc mis à jour
+[✅] 4. INDEX.adoc mis à jour
+[✅] 5. TEST_COVERAGE_ANALYSIS.adoc mis à jour (si applicable)
+[✅] 6. COMPLETED_TASKS_ARCHIVE.adoc mis à jour
+[✅] 7. Backup roté (si applicable)
+```
+
+*Règle absolue* : Aucune étape marquée [✅] si le fichier n'a pas été effectivement modifié et vérifié.
+
+== Outils Interdits
+
+❌ `TodoWrite` — la gouvernance se fait via les fichiers AsciiDoc
+❌ `Task` — idem
+
+== Références
+
+*Documentation gouvernance (AsciiDoc)* :
+- `.agents/npv_REFERENCE.adoc` — Stack, architecture, commandes, LLM, patterns (629 lignes LAZY)
+- `.agents/AUTH_REFERENCE.adoc` — Guide OAuth2 Google complet (168 lignes LAZY)
+- `.agents/TEST_REFERENCE.adoc` — Stratégie tests 3 niveaux, patterns WireMock/TestKit (241 lignes LAZY)
+- `.agents/MIGRATION_REFERENCE.adoc` — Matrice migration mp3-organizer, EPIC Download Auth US-1 à US-9 (347 lignes LAZY)
+- `.agents/encyclopedies/LAZY_EAGER_ENCYCLOPEDIE.adoc` — Méthodologie complète + historique sessions (COLD)
+
+*Projets connectés* :
+- `plantuml-gradle` — `/home/cheroliv/workspace/__repositories__/plantuml-gradle/plantuml-plugin/`
+- `bakery-gradle` — `~/workspace/__repositories__/bakery-gradle/bakery-plugin/`
+- `cheroliv.com` — `~/workspace/__repositories__/cheroliv.com/`
+
+*Articles méthodologie* :
+- 0108 — Stratégie Eager/Lazy : https://cheroliv.com/blog/2026/04/27/gouvernance-agent-opencode-eager-lazy.html
+- 0110 — Hot/Warm/Cold Backup : https://cheroliv.com/blog/2026/04/30/backup-contexte-agent-hot-warm-cold.html
+- 0111 — Audit & Split Encyclopédique : https://cheroliv.com/blog/2026/04/30/audit-contexte-agent-encyclopedie.html
+- 0112 — Comparaison LLMs Long Contexte : https://cheroliv.com/blog/2026/05/02/comparaison-deepseek-v4-pro-kimi-glml-long-contexte-gradle.html

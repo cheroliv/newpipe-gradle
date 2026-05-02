@@ -1,0 +1,206 @@
+= PROCÉDURES — Templates & Méthodes
+:toc: left
+:toclevels: 2
+:sectnums:
+:icons: font
+
+[abstract]
+Ce fichier contient les templates détaillés pour la procédure de fin de session et la politique de chargement EAGER/LAZY.
+*LAZY* — Chargé sur demande par l'agent (besoin de précision sur une étape).
+Pour les règles exécutives, voir `.agents/INDEX.adoc`.
+
+== Philosophie LAZY/EAGER
+
+|===
+| EAGER | LAZY
+| Tableau de bord | Manuel du propriétaire
+| < 100 lignes, < 10k tokens | Illimité, détaillé
+| Chargé automatiquement | Chargé sur demande
+| Règles absolues, mission courante | Archives sessions, historique, procédures
+===
+
+== Procédure de Fin de Session — 6 Étapes (+ Rotation Optionnelle)
+
+*Trigger* : mots-clés « fin de session », « on arrête là », « je quitte », « fin de la session ».
+
+*Règle d'or* : Exécuter *silencieusement* sans demander confirmation après chaque étape. Afficher uniquement la checklist finale.
+
+=== Étape 1 — Archiver la Session
+
+Créer `.agents/sessions/{N}-{type}-{sujet-kebab-case}.adoc` avec :
+
+[source,asciidoc]
+----
+= Session {N} — {Titre} {Type}
+:toc: left
+:sectnums:
+
+== Contexte
+*Projet* : newpipe-plugin
+*Module* : newpipe
+
+== Actions
+. Action 1 — Description
+. Action 2 — Description
+
+== Résultats
+*Fichiers créés* :
+- `chemin/fichier.kt` (description)
+*Fichiers modifiés* :
+- `chemin/fichier.kt` (changement)
+
+== Build & Tests
+*Build* : ✅ BUILD SUCCESSFUL / ❌ FAILED
+*Tests* : ✅ N/N passants
+
+== Prochaine Session
+*Priorité* : [Option A/B/C]
+----
+
+=== Étape 2 — Mettre à Jour PROMPT_REPRISE.adoc
+
+Format (max 70 lignes) :
+
+[source,asciidoc]
+----
+= PROMPT_REPRISE — Session {N+1} (NewPipe Plugin)
+
+[abstract]
+Ce fichier définit la mission de la session en cours.
+
+== Session {N} — Résumé
+*Résumé* :
+- [Ce qui a été fait durant la session N]
+*Fichiers créés/modifiés* :
+- `...`
+- `...`
+
+== Session {N+1} — Mission
+*Priorité* : 🔴 [Description priorité]
+*Options* :
+. [Option A]
+. [Option B]
+. [Option C]
+*Contexte technique* :
+- Build : `./gradlew :newpipe:build`
+- [Rappels critiques]
+*Rappel règles* :
+. publishToMavenLocal obligatoire
+. Git lecture seule
+. Pas de tests sans permission
+. Tokens jamais affichés
+----
+
+=== Étape 3 — Mettre à Jour SESSIONS_HISTORY.adoc
+
+Ajouter une ligne dans le tableau :
+
+```
+| {N} | {YYYY-MM-DD} | {type} | {sujet} | {score}/10
+```
+
+Limiter à 10 sessions (sliding window). Les sessions N-10 et antérieures migrent vers `backup/` lors de la rotation.
+
+=== Étape 4 — Mettre à Jour INDEX.adoc
+
+. Mettre à jour la date de dernière modification
+. Ajouter la session au tableau « Sessions Récentes »
+. Mettre à jour la roadmap (statuts EPIC, US)
+. Mettre à jour le portefeuille (session N)
+. Vérifier les seuils d'alerte
+
+=== Étape 5 — Mettre à Jour TEST_COVERAGE_ANALYSIS.adoc
+
+*Uniquement si des tests ont été ajoutés ou modifiés* durant la session.
+
+Ajouter une entrée dans « Suivi des Tests » et « Historique par Session ».
+
+=== Étape 6 — Mettre à Jour COMPLETED_TASKS_ARCHIVE.adoc
+
+Archiver en fin de mois ou si changement de sprint.
+
+Format :
+
+[source,asciidoc]
+----
+= COMPLETED_TASKS_ARCHIVE 2026-MM
+
+== Session {N}
+*Date* : {YYYY-MM-DD}
+*Type* : {type}
+*Sujet* : {sujet}
+*Context* : [résumé]
+*Réalisé* :
+. ...
+*Résultat* : [build/tests/état]
+*Prochaine* : [priorité]
+----
+
+=== Étape 7 — Rotation Backup (Optionnelle, Automatique)
+
+*Déclencheurs* :
+. N % 10 == 0 (toutes les 10 sessions)
+. EAGER cumulé > 500 lignes (`wc -l *.adoc .agents/INDEX.adoc .agents/archives/COMPLETED_TASKS_ARCHIVE_*.adoc PROMPT_REPRISE.adoc`)
+
+*Procédure* :
+
+```bash
+# 1. Créer le dossier de vague froide
+mkdir -p .agents/backup/Y20XX-sessions-X-Y/
+
+# 2. Copier intégrale de l'état actuel
+cp .agents/INDEX.adoc .agents/backup/Y20XX-sessions-X-Y/
+cp .agents/SESSIONS_HISTORY.adoc .agents/backup/Y20XX-sessions-X-Y/
+cp .agents/archives/COMPLETED_TASKS_ARCHIVE_*.adoc .agents/backup/Y20XX-sessions-X-Y/
+cp -r .agents/sessions/ .agents/backup/Y20XX-sessions-X-Y/
+
+# 3. Tronquer les actifs à 10 sessions
+# INDEX, SESSIONS_HISTORY : ne garder que les 10 dernières sessions
+# sessions/ : archiver N-10 et antérieur, garder N-1 et N
+```
+
+== Politique de Chargement
+
+|===
+| Fichier | Type | Quand charger | Taille max
+| `AGENT.adoc` | EAGER | Auto (via opencode.json) | 200 lignes
+| `PROMPT_REPRISE.adoc` | EAGER | Auto début session | 70 lignes
+| `LAZY_EAGER_ESSENTIALS.adoc` | EAGER | Auto début session | 74 lignes
+| `.agents/INDEX.adoc` | EAGER | Auto début session | 200 lignes
+| `.agents/SESSIONS_HISTORY.adoc` | EAGER | Auto début session | 30 lignes
+| Ce fichier (PROCEDURES) | LAZY | Besoin template | Illimité
+| `SESSION_CHECKLIST.adoc` | LAZY | Ambiguïté transition | Illimité
+| `AGENT_SESSION_MANAGER.adoc` | LAZY | Alerte seuil | Illimité
+| `TEST_COVERAGE_ANALYSIS.adoc` | LAZY | Tests modifiés | Illimité
+| `encyclopedies/*.adoc` | COLD | Jamais auto | Illimité
+| `backup/*/` | COLD | Consultation humaine | Illimité
+===
+
+== Mots-Clés Déclencheurs
+
+*Fin de session* : « fin de session », « on arrête là », « je quitte », « fin de la session »
+*Rotation backup* : « rotation backup », « backup rotation », « lance la rotation backup »
+*Tests* : « lance les tests », « run tests »
+
+== Golden Rule
+
+*L'agent exécute silencieusement. Jamais de demande de confirmation intermédiaire. Seule la checklist finale est affichée.*
+
+== Backup Pré-Modification (Fichiers Critiques)
+
+Pour `local.properties`, `gradle.properties`, `sessions.yml` :
+
+```bash
+cp fichier_critique fichier_critique.backup.$(date +%Y%m%d_%H%M%S)
+```
+
+Modifier avec `Edit` (PAS `Write` écrasant) après backup.
+
+== Règle de Sûreté sur les Fichiers de Configuration
+
+*Leçon de la session 2 (bakery-plugin, site.yml)* :
+
+. *AVANT* toute modification : `git check-ignore fichier` + `git ls-files fichier`
+. *BACKUP* : `cp fichier fichier.backup.$(date +%Y%m%d_%H%M%S)`
+. *MODIFIER* : utiliser `Edit` (modification partielle), *PAS* `Write` (écrasement total)
+. *NE PAS* remplacer des valeurs réelles (tokens, secrets) par des placeholders ou valeurs factices

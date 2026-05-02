@@ -1,0 +1,89 @@
+= Stratégie LAZY/EAGER — Principes Essentiels
+:icons: font
+
+[abstract]
+Ce fichier définit la stratégie de gestion du contexte agent.
+Chargé automatiquement (EAGER) en début de session.
+Pour la version exhaustive (627 lignes), voir `.agents/encyclopedies/LAZY_EAGER_ENCYCLOPEDIE.adoc` (COLD).
+
+== Principes
+
+[cols="1,2,2", options="header"]
+|===
+| | EAGER (Tableau de Bord) | LAZY (Manuel du Propriétaire)
+| *Taille* | <= 100 lignes, <= 10k tokens | Illimité, détaillé
+| *Chargement* | Auto, début de session | Sur demande de l'agent
+| *Contenu* | Règles absolues, mission courante, état critique | Archives sessions, historique complet, procédures détaillées, références techniques
+| *Rôle* | Orienter immédiatement l'agent | Répondre aux questions de contexte profond
+|===
+
+== Politique de Chargement
+
+[cols="1,2,3a", options="header"]
+|===
+| Fichier | Type | Quand charger
+| `AGENT.adoc` | EAGER | Début session (auto, via opencode.json)
+| `PROMPT_REPRISE.adoc` | EAGER | Début session (auto, max 70 lignes)
+| `LAZY_EAGER_ESSENTIALS.adoc` | EAGER | Début session (auto, ~74 lignes)
+| `.agents/INDEX.adoc` | EAGER | Début session (auto, max 200 lignes)
+| `.agents/SESSIONS_HISTORY.adoc` | EAGER | Début session (auto)
+| `.agents/PROCEDURES.adoc` | LAZY | Besoin template fin de session
+| `.agents/SESSION_CHECKLIST.adoc` | LAZY | Ambiguïté transition session
+| `.agents/AGENT_SESSION_MANAGER.adoc` | LAZY | Alerte seuil dépassé
+| `.agents/TEST_COVERAGE_ANALYSIS.adoc` | LAZY | Sur besoin (tests modifiés)
+| `.agents/encyclopedies/*.adoc` | COLD | Jamais auto (humain seulement)
+| `.agents/backup/*/` | COLD | Jamais chargé (consultation humaine)
+|===
+
+== Procédure de Fin de Session — 6 Étapes + Rotation Optionnelle
+
+L'agent détecte les mots-clés (« fin de session », « on arrête là ») et exécute *silencieusement* :
+
+. Créer archive `.agents/sessions/{N}-{type}-{sujet}.adoc`
+. Mettre à jour `PROMPT_REPRISE.adoc` pour session N+1
+. Mettre à jour `.agents/SESSIONS_HISTORY.adoc` (ligne : N / Date / Type / Sujet / Score)
+. Mettre à jour `.agents/INDEX.adoc` (état courant, roadmap, fichiers modifiés)
+. Mettre à jour `.agents/TEST_COVERAGE_ANALYSIS.adoc` (si tests ajoutés/modifiés)
+. Mettre à jour `.agents/archives/COMPLETED_TASKS_ARCHIVE_YYYY-MM.adoc`
+. Optionnel : rotation backup si N%10==0 OU EAGER cumulé > 500 lignes
+
+Afficher la checklist de confirmation :
+```
+✅ Procédure de fin de session exécutée
+📋 Checklist :
+[✅] 1. Archive session N créée (.agents/sessions/N-*.adoc)
+[✅] 2. PROMPT_REPRISE.adoc mis à jour pour session N+1
+[✅] 3. SESSIONS_HISTORY.adoc mis à jour
+[✅] 4. INDEX.adoc mis à jour
+[✅] 5. TEST_COVERAGE_ANALYSIS.adoc mis à jour (si applicable)
+[✅] 6. COMPLETED_TASKS_ARCHIVE.adoc mis à jour
+[✅] 7. Backup roté (si applicable)
+```
+
+== Convention de Nommage des Sessions
+
+```
+{N}-{type}-{sujet-kebab-case}.adoc
+```
+
+*Exemples* :
+- `000-bootstrap-gouvernance-agent.adoc`
+- `1-feature-authentification-google.adoc`
+- `012-debug-timeout-integration-test.adoc`
+- `042-fix-compilation-kotlin.adoc`
+
+== Comment l'Agent Sait Quoi Charger
+
+. *Début session* → `AGENT.adoc` + `PROMPT_REPRISE.adoc` + `LAZY_EAGER_ESSENTIALS.adoc` + `.agents/INDEX.adoc` + `.agents/SESSIONS_HISTORY.adoc` (auto)
+. *Besoin détails* → charger `PROCEDURES.adoc`, `*_REFERENCE.adoc`, `sessions/` en LAZY
+. *Connaissance froide* → `encyclopedies/`, `backup/` — jamais automatique
+
+== 3 Couches de Défense
+
+. *EAGER/LAZY* — structure par *disponibilité*
+. *Hot/Warm/Cold* — structure par *fraîcheur*
+. *ESSENTIALS/encyclopedie* — structure par *densité*
+
+== Golden Rule
+
+*Ne jamais rien perdre. Toujours tout relocaliser.*

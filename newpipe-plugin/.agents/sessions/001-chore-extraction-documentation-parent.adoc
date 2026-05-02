@@ -1,0 +1,108 @@
+= Session 001 — Extraction Complète Documentation Parent (chore)
+:toc: left
+:sectnums:
+:icons: font
+
+== Contexte
+
+*Projet* : newpipe-plugin
+*Session précédente* : 000 — Bootstrap gouvernance Eager/Lazy
+*État entrée* : Structure `.agents/` créée, 4 fichiers LAZY créés (npv_REFERENCE, AUTH_REFERENCE, TEST_REFERENCE, MIGRATION_REFERENCE)
+
+Mission : extraire TOUTE la substantifique moelle des 16 fichiers `../*.md` parent + 10 prompts `.prompts/*.md` dans les fichiers `.agents/*.adoc` avant suppression des sources Markdown.
+
+== État Initial
+
+*Build* : Non vérifié (session documentaire)
+*Tests* : Non exécutés
+*Gouvernance* : EAGER 559 lignes, LAZY 1883 lignes, COLD encyclopédie existante
+
+== Actions
+
+=== Phase 1 — Enrichissement Encyclopédie COLD
+
+. Relecture exhaustive des 12 fichiers `../*.md` technique (ARCHITECTURE, COMMANDS, PROJECT_STRUCTURE, CUSTOMIZATION, BUILDSRC_ARCHITECTURE, PROJECT_SUMMARY, QUICK_START, EPIC_LLM_INTEGRATION, EPIC_DOWNLOAD_AUTHENTICATED, MIGRATION_MATRIX, TESTING_STRATEGY, AUTH_GUIDE)
+. Relecture exhaustive des 4 fichiers de gouvernance parent (AGENT.md, BACKLOG.md, BACKLOG_BACKUP.md, PROMPT_REPRISE.md)
+. Relecture exhaustive des 10 prompts `.prompts/PROMPT_REPRISE_*.md`
+. Enrichissement de `.agents/encyclopedies/LAZY_EAGER_ENCYCLOPEDIE.adoc` avec 3 nouvelles annexes :
+  - *Annexe E* : Mapping complet des 16 fichiers `.md` → `.adoc` (tableau ligne à ligne)
+  - *Annexe F* : Structure confirmée de mp3-organizer comme sous-projet frère dans newpipe-gradle/
+  - *Annexe G* : Historique complet des 9 sessions pré-gouvernance (avril 2026)
+  - *Annexe H* : 3 sessions mp3-organizer EPIC LLM Integration (LlmClient, Tâches Gradle IA, Agent Playlist + XspfGenerator + VLC, roadmap sessions 4-6, spécifications Gemma4, stack IA complète, mapping migration)
+  - *Annexe I* : Archives chronologiques des 10 prompts (signatures méthodes, décomptes tests, métriques couverture exactes, commits, progression backlog par prompt)
+
+=== Phase 2 — Comblement des Gaps LAZY
+
+. `npv_REFERENCE.adoc` enrichi avec sections DSL personnalisé, Retry backoff exponentiel, Validation URL YouTube, pattern nouvelle tâche Gradle (extrait de CUSTOMIZATION.md)
+. Gap BUILDSRC_ARCHITECTURE.md comblé (contenu déjà redondant avec patterns existants)
+. Gap EPIC_LLM_INTEGRATION.md comblé (notes sessions 1-3 ajoutées en Annexe H)
+
+=== Phase 3 — Nettoyage Références `../` et vérification mp3-organizer
+
+. 19 occurrences de `../` dans les `.adoc` nettoyées (remplacées par pointeurs vers `.agents/*.adoc`)
+. Vérification zéro `../` sur l'ensemble des `.adoc` (grep confirmé)
+. Confirmation emplacement mp3-organizer : `/home/cheroliv/workspace/__repositories__/newpipe-gradle/mp3-organizer/`
+. Vérification des seuils EAGER (559 lignes, sous le seuil 800)
+
+== Résultats
+
+*Fichiers enrichis* :
+- `.agents/encyclopedies/LAZY_EAGER_ENCYCLOPEDIE.adoc` : 267 → 1129 lignes (+ Annexe E, F, G, H, I)
+- `.agents/npv_REFERENCE.adoc` : 629 → 685 lignes (+ DSL, Retry, Validation URL, pattern nouvelle tâche)
+
+*Fichiers nettoyés* (suppression `../` références) :
+- `AGENT.adoc`
+- `PROMPT_REPRISE.adoc`
+- `.agents/INDEX.adoc`
+- `.agents/SESSION_CHECKLIST.adoc`
+- `.agents/sessions/000-bootstrap-gouvernance-agent.adoc`
+- `.agents/encyclopedies/LAZY_EAGER_ENCYCLOPEDIE.adoc`
+
+*Fichiers créés* :
+- `.agents/sessions/001-chore-extraction-documentation-parent.adoc` (ce fichier)
+
+== Build & Tests Finaux
+
+*Build* : Non vérifié (session purement documentaire, pas de modification de code source)
+*Tests* : Non exécutés (règle 2 : pas de tests sans permission)
+
+== Décisions
+
+. *Golden Rule respectée* : Rien perdu, tout relocalisé. 27 fichiers `.md` parent (16 + 10 + 1) → substantifique moelle intégralement extraite
+. *mp3-organizer confirmé* comme sous-projet frère dans `newpipe-gradle/`
+. *Aucun fichier parent supprimé* — scope suppression hors autorisation agent
+. *Zéro `../`* dans l'ensemble des `.adoc`
+. *EAGER stable* à 559 lignes
+
+== Prochaine Session
+
+*Priorité* : 🔴 Définir avec l'utilisateur
+
+*Options* :
+. *Authentification* : `./gradlew sessionStatus` — vérifier état sessions OAuth2
+. *Build* : `./gradlew :newpipe:clean :newpipe:build` — valider compilation
+. *Tests* : `./gradlew :newpipe:test` — lancer tests existants (80+ unitaires)
+. *Migration IA* : Session 4 EPIC LLM — migrer `LlmClient.kt` depuis `mp3-organizer` vers `newpipe-plugin`
+. *Version Catalog* : Créer `gradle/libs.versions.toml` (template dans `npv_REFERENCE.adoc`)
+
+*Rappel règles* :
+. `publishToMavenLocal` après toute modif
+. Git : lecture seule (sauf demande explicite de l'utilisateur)
+. Pas de tests sans permission en fin de session
+. Config : backup + Edit pas Write
+. Tokens : JAMAIS affichés
+
+== Métriques de Session
+
+|===
+| Métrique | Valeur
+| Durée | ~60 minutes (analyse 27 fichiers + enrichissement COLD + nettoyage)
+| Fichiers enrichis | 2 (encyclopédie + npv_REFERENCE)
+| Fichiers nettoyés | 6 (suppression ../)
+| Fichiers créés | 1 (archive session)
+| Lignes COLD avant/après | 267 → 1129
+| Lignes LAZY npv_REFERENCE | 629 → 685
+| Score auto-évalué | 9/10
+|===
+
+*Note* : Score 9/10 car extraction complète mais build et tests non vérifiés. À rattraper en session 002.

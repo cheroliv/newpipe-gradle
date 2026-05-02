@@ -1,0 +1,108 @@
+= Session 000 — Bootstrap Gouvernance Agent (chore)
+:toc: left
+:sectnums:
+:icons: font
+
+== Contexte
+
+*Projet* : newpipe-plugin
+*Module* : newpipe
+*État initial* : Plugin fonctionnel, 42/42 points backlog, pas de gouvernance agent
+
+Le dossier parent `newpipe-gradle/` contient une riche documentation (16 fichiers Markdown : AGENT.md, BACKLOG.md, ARCHITECTURE.md, etc.) mais aucun mécanisme de persistance du contexte entre sessions Opencode.
+
+La méthodologie Eager/Lazy, éprouvée sur 6 projets (plantuml-plugin 138 sessions, magic_stick 65 sessions, etc.), n'avait jamais été déployée sur ce projet.
+
+== État Initial
+
+*Build* : ✅ BUILD SUCCESSFUL (présumé, pas vérifié durant cette session)
+*Tests* : 80+ tests unitaires passants (état avril 2026)
+*EPICs* : Download Auth 100% (42/42), LLM Integration en attente
+
+== Actions
+
+. *Analyse* des 4 articles méthodologie (0108 Eager/Lazy, 0110 Hot/Warm/Cold, 0111 Audit encyclopédique, 0112 Comparaison LLMs)
+. *Analyse* des 6 repos implémentant la stratégie (plantuml, bakery, magic_stick, cheroliv.com, jhipster, quizz-benchmark)
+. *Analyse* des 16 fichiers de documentation parent (AGENT.md, BACKLOG.md, ARCHITECTURE.md, etc.)
+. *Création* de la structure `.agents/` : `sessions/`, `archives/`, `backup/`, `encyclopedies/`
+. *Création* de `opencode.json` (bootstrap bridge)
+. *Création* de `AGENT.adoc` — directives maîtres EAGER (287 lignes)
+. *Création* de `PROMPT_REPRISE.adoc` — mission session 1 (70 lignes)
+. *Création* de `LAZY_EAGER_ESSENTIALS.adoc` — principes stratégie (74 lignes)
+. *Création* de `.agents/INDEX.adoc` — règles exécutives + roadmap (200 lignes)
+. *Création* de `.agents/SESSIONS_HISTORY.adoc` — tableau chronologique
+. *Création* de `.agents/PROCEDURES.adoc` — templates 6 étapes (260 lignes)
+. *Création* de `.agents/SESSION_CHECKLIST.adoc` — déclencheurs transition (130 lignes)
+. *Création* de `.agents/AGENT_SESSION_MANAGER.adoc` — règles gestion, seuils (180 lignes)
+. *Création* de `.agents/TEST_COVERAGE_ANALYSIS.adoc` — suivi tests
+. *Création* de `.agents/encyclopedies/LAZY_EAGER_ENCYCLOPEDIE.adoc` — méthodologie COLD (600+ lignes)
+. *Création* de `.agents/archives/COMPLETED_TASKS_ARCHIVE_2026-05.adoc`
+. *Création* de cette archive de session
+
+== Résultats
+
+*Fichiers créés* (17) :
+- `opencode.json` (6 lignes)
+- `AGENT.adoc` (287 lignes)
+- `PROMPT_REPRISE.adoc` (70 lignes)
+- `LAZY_EAGER_ESSENTIALS.adoc` (74 lignes)
+- `.agents/INDEX.adoc` (200 lignes)
+- `.agents/SESSIONS_HISTORY.adoc` (20 lignes)
+- `.agents/PROCEDURES.adoc` (260 lignes)
+- `.agents/SESSION_CHECKLIST.adoc` (130 lignes)
+- `.agents/AGENT_SESSION_MANAGER.adoc` (180 lignes)
+- `.agents/TEST_COVERAGE_ANALYSIS.adoc` (60 lignes)
+- `.agents/encyclopedies/LAZY_EAGER_ENCYCLOPEDIE.adoc` (600+ lignes)
+- `.agents/archives/COMPLETED_TASKS_ARCHIVE_2026-05.adoc` (50 lignes)
+- `.agents/sessions/000-bootstrap-gouvernance-agent.adoc` (ce fichier)
+- Dossiers : `.agents/sessions/`, `.agents/archives/`, `.agents/backup/`, `.agents/encyclopedies/`
+
+*Fichiers modifiés* : 0 (aucun fichier existant modifié)
+
+== Build & Tests Finaux
+
+*Build* : Non vérifié (session purement documentaire, pas de modification de code)
+*Tests* : Non exécutés (règle 2 : pas de tests sans permission)
+
+== Décisions
+
+. *Format* : AsciiDoc (cohérent avec la stratégie des 6 autres projets)
+. *Modèle IA* : DeepSeek-V4-Pro (CSA+HCA, 128K stable) — calibré pour le contexte EAGER
+. *Calibration contexte* : ~800 lignes EAGER (AGENT + PROMPT + ESSENTIALS + INDEX + HISTORY)
+. *Racine de travail* : `newpipe-plugin/` (pas `newpipe-gradle/`)
+. *Notation Gradle* : `./gradlew :newpipe:task` ou `./gradlew task` (l'unique sous-projet)
+. *Pas d'agents spécialisés* créés pour l'instant — le plugin n'a pas de domaine métier > 100 lignes distinct
+. *Documentation parent* conservée comme référence LAZY (pas migrée en AsciiDoc)
+. *Backlog historique* (42/42) archivé dans `AGENT.adoc` — pas régressé
+
+== Prochaine Session
+
+*Priorité* : 🔴 Définir avec l'utilisateur
+
+*Options* :
+. *Authentification* : `./gradlew sessionStatus` — vérifier état sessions OAuth2
+. *Build* : `./gradlew :newpipe:clean :newpipe:build` — valider compilation
+. *Tests* : `./gradlew :newpipe:test` — lancer tests existants
+. *Migration IA* : Migrer `LlmClient.kt` depuis `mp3-organizer`
+. *Backlog* : État inline dans `AGENT.adoc` (actuellement 100%, peut nécessiter révision)
+. *Version Catalog* : Créer `gradle/libs.versions.toml` (template dans `.agents/npv_REFERENCE.adoc`)
+
+*Rappel règles session 1* :
+. `publishToMavenLocal` après toute modif
+. Git : lecture seule
+. Pas de tests sans permission en fin de session
+. Config : backup + Edit pas Write
+. Tokens : JAMAIS affichés
+
+== Métriques de Session
+
+|===
+| Métrique | Valeur
+| Durée | ~45 minutes (analyse + création)
+| Fichiers créés | 17 (tous nouveaux)
+| Fichiers modifiés | 0
+| Lignes créées | ~2500 (gouvernance complète)
+| Score auto-évalué | 8/10
+===
+
+*Note* : Score 8/10 car le build et les tests n'ont pas été vérifiés. À rattraper en session 1.

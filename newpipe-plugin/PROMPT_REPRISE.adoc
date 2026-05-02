@@ -1,0 +1,50 @@
+= PROMPT_REPRISE — Session 2 (NewPipe Plugin)
+
+[abstract]
+Ce fichier définit la mission de la session en cours.
+*Chargé automatiquement (EAGER)* en début de session.
+*Mis à jour à chaque fin de session.*
+
+== Session 1 — Extraction Documentation Parent
+
+*Résumé* :
+- Extraction intégrale de la substantifique moelle des 27 fichiers .md parent
+- Enrichissement encyclopédie COLD : 267 → 1129 lignes (Annexes E à I)
+- Enrichissement npv_REFERENCE LAZY : 629 → 685 lignes (DSL, Retry, Validation)
+- Carte confirmée : mp3-organizer/ est sous-projet frère dans newpipe-gradle/
+- Nettoyage de toutes les références `../` dans les .adoc
+- Zéro `../` confirmé, EAGER 559 lignes stable
+
+*Fichiers enrichis* :
+- `.agents/encyclopedies/LAZY_EAGER_ENCYCLOPEDIE.adoc` (1129 lignes COLD)
+- `.agents/npv_REFERENCE.adoc` (685 lignes LAZY)
+
+*Fichiers nettoyés (../) :*
+- `AGENT.adoc`, `PROMPT_REPRISE.adoc`, `.agents/INDEX.adoc`, `.agents/SESSION_CHECKLIST.adoc`, `.agents/sessions/000.adoc`, `.agents/encyclopedies/*.adoc`
+
+== Session 2 — Mission
+
+*Priorité* : 🔴 Définir avec l'utilisateur le point d'entrée
+
+*Options* :
+. *Authentification* : Vérifier état des sessions OAuth2, `./gradlew sessionStatus`
+. *Build* : Valider la compilation, `./gradlew :newpipe:clean :newpipe:build`
+. *Tests* : Lancer les tests existants (80+ unitaires), `./gradlew :newpipe:test`
+. *Migration IA* : Session 4 EPIC LLM — migrer `LlmClient.kt` depuis `mp3-organizer`
+. *Version Catalog* : Créer `gradle/libs.versions.toml` (template dans `npv_REFERENCE.adoc`)
+. *Suppression fichiers ../*.md* : Après validation humaine, supprimer les 27 fichiers Markdown parent dont la substantifique moelle est maintenant dans `.agents/`
+
+*Contexte technique* :
+- Build : `./gradlew build` ou `./gradlew :newpipe:build`
+- Modèle IA : `deepseek-v4-pro` (via Ollama cloud, CSA+HCA, 1M contexte)
+- Authentification Google : `client_secrets/` + `sessions.yml` (⚠️ gitignore)
+- EPIC Download Auth : 42/42 points (100%) dans `AGENT.adoc` + `MIGRATION_REFERENCE.adoc`
+- EPIC LLM Integration : roadmap sessions 4-6 dans `.agents/encyclopedies/LAZY_EAGER_ENCYCLOPEDIE.adoc` (Annexe H)
+- mp3-organizer : `/home/cheroliv/workspace/__repositories__/newpipe-gradle/mp3-organizer/`
+
+*Rappel règles* :
+. `publishToMavenLocal` obligatoire après toute modif du code Kotlin
+. Git : lecture seule sauf demande explicite
+. Pas de tests en fin de session sans permission
+. Config files : `git check-ignore` avant modif, Edit pas Write
+. Tokens/Secrets : JAMAIS affichés dans le terminal

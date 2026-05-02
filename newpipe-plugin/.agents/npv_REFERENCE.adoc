@@ -1,0 +1,685 @@
+= NewPipe Plugin — Référence Technique & Architecture
+:toc: left
+:toclevels: 3
+:sectnums:
+:icons: font
+
+[abstract]
+*LAZY* — Chargé sur demande par l'agent.
+Archive les connaissances techniques de la documentation parent `newpipe-gradle/` (ARCHITECTURE.md, EPIC_LLM_INTEGRATION.md, COMMANDS.md, PROJECT_STRUCTURE.md, CUSTOMIZATION.md, BUILDSRC_ARCHITECTURE.md, PROJECT_SUMMARY.md, QUICK_START.md).
+Rien n'a été perdu. Tout a été relocalisé.
+
+== Stack Technique
+
+```yaml
+Langages:
+  - Kotlin 2.3.20
+  - Gradle DSL 9.4.1
+
+IA / LLM:
+  - LangChain4j 1.12.2
+  - Ollama (local)
+  - Modèle: gemma4:e4b-it-q4_K_M (9.6GB, multimodal)
+  - Modèle prod: deepseek-v4-pro (via Ollama cloud, CSA+HCA, 1M contexte)
+
+YouTube:
+  - NewPipeExtractor v0.24.0
+  - OAuth2 Google API
+  - Cookies de session
+
+Base de données (mp3-organizer, référence):
+  - PostgreSQL 15+
+  - R2DBC (reactive)
+
+Lecture (mp3-organizer):
+  - VLC (via ProcessBuilder)
+  - Format: XSPF playlists
+
+Docker:
+  - ffmpeg (conversion audio)
+  - Portainer (gestion containers)
+```
+
+== Structure du Sous-Projet `:newpipe`
+
+```
+newpipe/
+├── build.gradle.kts
+└── src/main/kotlin/com/cheroliv/newpipe/
+    ├── DownloaderPlugin.kt
+    ├── NewpipeManager.kt
+    ├── YouTubeDownloader.kt
+    ├── AuthSessionTask.kt          # OAuth2 Device Flow
+    ├── BuildSessionsTask.kt        # Construction sessions
+    ├── SessionManager.kt           # Round-Robin + refresh
+    ├── DownloadMusicTask.kt        # Téléchargement
+    ├── Mp3Converter.kt             # Conversion MP3
+    ├── Models.kt                   # Data classes
+    ├── TokenRefresher.kt           # Refresh OAuth2
+    ├── AuthErrorHandler.kt         # Erreurs auth
+    ├── AgeVerificationHandler.kt   # Vidéos 18+
+    ├── SessionStatusTask.kt        # Monitoring
+    ├── SessionMonitor.kt
+    ├── PrivatePlaylistHandler.kt   # Playlists privées
+    ├── InteractiveCli.kt           # CLI interactive
+    └── ai/                         # Module IA (migration en attente)
+        ├── LlmClient.kt
+        ├── SessionGeneratorAgent.kt
+        └── MaintenanceAgent.kt
+```
+
+=== Dépendances dans build.gradle.kts (newpipe)
+
+[source,kotlin]
+----
+// Core
+implementation(kotlin("stdlib-jdk8"))
+implementation(gradleApi())
+
+// NewPipe
+implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.7.3")
+implementation("com.fasterxml.jackson.module:jackson-module-kotlin:2.15.2")
+implementation("com.fasterxml.jackson.dataformat:jackson-dataformat-yaml:2.15.2")
+implementation("com.squareup.okhttp3:okhttp:4.11.0")
+implementation("com.github.TeamNewPipe:NewPipeExtractor:v0.24.0")
+implementation("net.jthink:jaudiotagger:3.0.1")
+
+// Tests
+testImplementation(kotlin("test-junit5"))
+testImplementation("org.assertj:assertj-core:3.24.2")
+testRuntimeOnly("org.junit.platform:junit-platform-launcher")
+----
+
+=== Configuration Gradle
+
+- *Toolchain Java* : 11
+- *SourceSet functionalTest* : `src/functionalTest/kotlin`
+- *Plugin com.cheroliv.newpipe* : `DownloaderPlugin` (class d'entrée)
+- *Publication* : Maven Central (Sonatype OSSRH)
+- *Signing* : GPG (useGpgCmd), release seulement
+- *Version* : définie dans `libs.plugins.newpipe.get().version`
+
+== Patterns d'Architecture
+
+=== 1. LLM Client Pattern (depuis plantuml-gradle)
+
+[source,kotlin]
+----
+import dev.langchain4j.model.chat.ChatModel
+import dev.langchain4j.model.ollama.OllamaChatModel
+
+class LlmClient(
+    private val baseUrl: String = "http://localhost:11434",
+    private val modelName: String = "gemma4:e4b-it-q4_K_M"
+) {
+    private val model: ChatModel by lazy {
+        OllamaChatModel.builder()
+            .baseUrl(baseUrl)
+            .modelName(modelName)
+            .temperature(0.7)
+            .build()
+    }
+
+    suspend fun chat(prompt: String, systemMessage: String? = null): String {
+        return model.chat(buildFullPrompt(prompt, systemMessage))
+    }
+}
+----
+
+Fichier de référence : `mp3-organizer/src/main/kotlin/com/mp3organizer/ai/LlmClient.kt`
+
+=== 2. Agent Pattern
+
+[source,kotlin]
+----
+class SessionGeneratorAgent(private val llm: LlmClient) {
+    suspend fun translatePromptToSession(prompt: String): Session {
+        val sql = llm.chatWithContext(
+            prompt = "Génère configuration pour: $prompt",
+            context = YOUTUBE_SCHEMA,
+            systemMessage = SESSION_SYSTEM_MESSAGE
+        )
+        return parseSession(sql)
+    }
+}
+----
+
+Fichier de référence : `mp3-organizer/src/main/kotlin/com/mp3organizer/ai/PlaylistAgent.kt`
+
+=== 3. Gradle Task Pattern
+
+[source,kotlin]
+----
+fun registerJavaExecTask(
+    name: String, description: String, group: String,
+    mainClass: String, vararg args: String = emptyArray()
+) {
+    tasks.register<JavaExec>(name) {
+        this.description = description
+        this.group = group
+        classpath = sourceSets["main"].runtimeClasspath
+        this.mainClass.set(mainClass)
+        if (args.isNotEmpty()) this.args = args.toList()
+    }
+}
+----
+
+Fichier de référence : `mp3-organizer/build.gradle.kts`
+
+=== 4. Gradle Plugin Pattern
+
+[source,kotlin]
+----
+class DownloaderPlugin : Plugin<Project> {
+    override fun apply(project: Project) {
+        project.tasks.register("buildSessions", BuildSessionsTask::class.java)
+        project.tasks.register("authSessions", AuthSessionTask::class.java)
+        project.tasks.register("downloadMusic", DownloadMusicTask::class.java)
+        project.tasks.register("sessionStatus", SessionStatusTask::class.java)
+    }
+}
+----
+
+Fichier : `newpipe/src/main/kotlin/com/cheroliv/newpipe/DownloaderPlugin.kt`
+
+== Architecture Authentification YouTube
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│  Gradle Build                                                │
+└─────────────────────────────────────────────────────────────┘
+         │
+         ▼
+┌─────────────────────────────────────────────────────────────┐
+│  downloadMusic Task (DownloadMusicTask.kt)                   │
+└─────────────────────────────────────────────────────────────┘
+         │
+         ▼
+┌─────────────────────────────────────────────────────────────┐
+│  SessionManager                                              │
+│  - Round-Robin entre sessions auth                           │
+│  - Fallback anonyme si toutes sessions invalides             │
+└─────────────────────────────────────────────────────────────┘
+         │
+         ▼
+┌─────────────────────────────────────────────────────────────┐
+│  DownloaderImpl                                              │
+│  - Utilise NewPipe Extractor                                 │
+│  - Injecte cookies OAuth2 dans les requêtes                  │
+└─────────────────────────────────────────────────────────────┘
+         │
+         ▼
+┌─────────────────────────────────────────────────────────────┐
+│  YouTube API                                                 │
+│  - Vidéos publiques (anonyme)                                │
+│  - Vidéos réservées membres (authentifié requis)             │
+│  - Vidéos geo-restreintes (authentifié requis)               │
+└─────────────────────────────────────────────────────────────┘
+```
+
+== Flux OAuth2 Device Flow
+
+```
+1. buildSessions
+   ↓
+2. Ouvre browser pour OAuth2 consent
+   ↓
+3. Google retourne authorization code
+   ↓
+4. Échange code contre tokens (access + refresh)
+   ↓
+5. Stocke tokens dans sessions.yml (chiffré)
+   ↓
+6. Utilise tokens pour API YouTube
+```
+
+*URLs OAuth2* :
+- Device Code : `https://oauth2.googleapis.com/device/code`
+- Token : `https://oauth2.googleapis.com/token`
+- Scope : `https://www.googleapis.com/auth/youtube.readonly`
+
+== Architecture LLM & IA (mp3-organizer — référence)
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│  GRADLE + LLM + PostgreSQL + VLC                             │
+└─────────────────────────────────────────────────────────────┘
+
+Prompt: "Je veux du jazz piano pour coder le soir"
+
+         ▼
+┌─────────────────┐
+│  LLM (gemma4)   │ → Analyse l'intention + contexte DB
+│  + DB Schema    │ → Génère requête SQL
+└─────────────────┘
+         │
+         ▼
+┌─────────────────┐
+│  PostgreSQL     │ → Exécute requête
+│  (R2DBC)        │ → Retourne liste de tracks
+└─────────────────┘
+         │
+         ▼
+┌─────────────────┐
+│  Générateur     │ → Crée fichier .xspf (VLC playlist)
+│  Playlist XSPF  │
+└─────────────────┘
+         │
+         ▼
+┌─────────────────┐
+│  VLC            │ → Ouvre et joue la playlist
+│  (Exec Task)    │
+└─────────────────┘
+```
+
+== API LangChain4j v1.12.2
+
+[source,kotlin]
+----
+import dev.langchain4j.model.chat.ChatModel
+import dev.langchain4j.model.ollama.OllamaChatModel
+
+val model: ChatModel = OllamaChatModel.builder()
+    .baseUrl("http://localhost:11434")
+    .modelName("gemma4:e4b-it-q4_K_M")
+    .temperature(0.7)
+    .build()
+
+val response: String = model.chat("prompt")
+----
+
+*Dépendances* :
+```kotlin
+implementation("dev.langchain4j:langchain4j:1.12.2")
+implementation("dev.langchain4j:langchain4j-ollama:1.12.2")
+```
+
+== Modèle LLM : Gemma 4 E4B (local)
+
+*Spécifications* :
+- *Taille* : 9.6GB
+- *Contexte* : 128K tokens
+- *Modalités* : Texte, Image, Audio (compréhension uniquement)
+- *Type* : Edge model (optimisé local)
+- *Force* : Raisonnement, code, compréhension langage naturel
+
+*Installation* :
+```bash
+ollama pull gemma4:e4b-it-q4_K_M
+ollama serve
+```
+
+== Module IA Cible (EPIC LLM Integration)
+
+=== Fonctionnalités à Implémenter
+
+. *Module LLM Client* — Utiliser `ChatModel` de langchain4j 1.12.2
+. *Tâches Gradle IA* — `playSmart`, `playArtist`, `playGenre`, `llmChat`, `sqlPrompt`, `maintenance`
+. *Agents Spécialisés* — `SessionGeneratorAgent` (adapté de PlaylistAgent), `MaintenanceAgent`
+. *Workflow VLC* — Prompt → LLM → PostgreSQL → XSPF → VLC (dans mp3-organizer)
+. *Configuration Centralisée* — `NewpipeConfig.kt`, `ConfigLoader`, `ConfigMerger`
+. *Version Catalog* — `gradle/libs.versions.toml`
+
+=== Roadmap des Sessions OpenCode
+
+. *Session 1* ✅ — Setup LLM Client dans mp3-organizer
+. *Session 2* ✅ — Tâches Gradle IA (playSmart, llmChat, sqlPrompt)
+. *Session 3* ✅ — Agent Playlist + XspfGenerator + VLC
+. *Session 4* ⏳ — Migration vers NewPipe Plugin (LlmClient, SessionGeneratorAgent, PlaylistGenerator)
+. *Session 5* ⏳ — Configuration & RAG (NewpipeConfig, ConfigLoader, chatWithCodebase)
+. *Session 6* ⏳ — Tests & Validation (WireMock, GradleTestKit, Ollama tag)
+
+=== Structure Cible
+
+```
+newpipe/newpipe/src/main/kotlin/
+└── com/cheroliv/newpipe/
+    ├── ai/                         # Module IA
+    │   ├── LlmClient.kt
+    │   ├── SessionGeneratorAgent.kt
+    │   ├── PlaylistGeneratorAgent.kt
+    │   └── MaintenanceAgent.kt
+    ├── tasks/
+    │   ├── DownloadMusicTask.kt
+    │   ├── BuildSessionsTask.kt
+    │   ├── GeneratePlaylistTask.kt
+    │   └── ChatWithCodebaseTask.kt
+    └── config/
+        ├── NewpipeConfig.kt
+        ├── ConfigLoader.kt
+        └── ConfigMerger.kt
+```
+
+=== Tâches IA Futures
+
+```bash
+# Chat interactif
+./gradlew llmChat --args="quelle est l'architecture du plugin ?"
+
+# Génération de sessions YouTube
+./gradlew suggestSessions --args="musique électronique française"
+
+# Génération de playlists
+./gradlew generatePlaylist --args="jazz années 60"
+
+# Analyse code
+./gradlew analyzeCode
+
+# Chat avec la codebase (RAG)
+./gradlew chatWithCodebase --args="comment fonctionne l'authentification ?"
+```
+
+=== Dépendances à Ajouter
+
+```kotlin
+implementation("dev.langchain4j:langchain4j:1.12.2")
+implementation("dev.langchain4j:langchain4j-ollama:1.12.2")
+```
+
+=== Version Catalog Cible
+
+```toml
+[versions]
+kotlin = "2.3.20"
+gradle = "9.4.1"
+langchain4j = "1.12.2"
+newpipe-extractor = "0.24.0"
+
+[libraries]
+kotlin-stdlib = { module = "org.jetbrains.kotlin:kotlin-stdlib", version.ref = "kotlin" }
+langchain4j-core = { module = "dev.langchain4j:langchain4j", version.ref = "langchain4j" }
+langchain4j-ollama = { module = "dev.langchain4j:langchain4j-ollama", version.ref = "langchain4j" }
+newpipe-extractor = { module = "com.github.TeamNewPipe:NewPipeExtractor", version.ref = "newpipe-extractor" }
+```
+
+== Commandes Complètes
+
+=== Authentification Google
+```bash
+./gradlew buildSessions       # Générer credentials OAuth2
+./gradlew authSessions        # Authentifier comptes Google
+./gradlew sessionStatus       # État des sessions
+./gradlew cleanSessions       # Supprimer tokens
+```
+
+=== Téléchargement
+```bash
+./gradlew downloadMusic --url="URL_YOUTUBE"
+./gradlew downloadMusic --url="URL" --output="./ma_musique"
+./gradlew downloadMusic       # Depuis musics.yml
+./gradlew newpipeInteractive  # CLI Interactive
+```
+
+=== Build & Test
+```bash
+./gradlew :newpipe:clean :newpipe:build
+./gradlew :newpipe:test
+./gradlew :newpipe:functionalTest
+./gradlew :newpipe:publishToMavenLocal
+```
+
+=== Tâches IA (mp3-organizer — référence)
+```bash
+./gradlew llmChat --args="quelle est la structure de la DB ?"
+./gradlew playSmart --args="jazz piano détente"
+./gradlew playArtist --args="Miles Davis"
+./gradlew playGenre --args="jazz"
+./gradlew sqlPrompt --args="top 10 artistes par nombre de tracks"
+./gradlew maintenance       # Analyse code
+```
+
+=== Vérifications
+```bash
+# Ollama
+ollama list | grep gemma4
+ollama pull gemma4:e4b-it-q4_K_M
+ollama serve
+
+# Secrets OAuth
+ls -la client_secrets/
+cat sessions.yml
+
+# PostgreSQL (mp3-organizer)
+docker ps | grep postgres
+```
+
+=== Variables d'Environnement (mp3-organizer)
+```bash
+export DB_HOST="localhost"
+export DB_PORT="5432"
+export DB_NAME="mp3_organizer"
+export DB_USER="postgres"
+export DB_PASSWORD="secret"
+export OLLAMA_BASE_URL="http://localhost:11434"
+export OLLAMA_MODEL="gemma4:e4b-it-q4_K_M"
+```
+
+=== Variables d'Environnement (newpipe-gradle)
+```bash
+export NEWPIPE_SESSIONS_PATH="/chemin/vers/sessions.yml"
+export NEWPIPE_OUTPUT_PATH="/chemin/vers/downloads"
+```
+
+== Projets Locaux
+
+- `newpipe-gradle` : `/home/cheroliv/workspace/__repositories__/newpipe-gradle`
+- `mp3-organizer` : `/home/cheroliv/Musique/abdo/mp3-organizer`
+- `plantuml-gradle` : `/home/cheroliv/workspace/__repositories__/plantuml-gradle`
+
+=== mp3-organizer (Structure)
+
+```
+mp3-organizer/
+├── build.gradle.kts              # ✅ Version catalog + tasks
+├── gradle/
+│   └── libs.versions.toml        # ✅ Centralisé
+└── src/main/kotlin/com/mp3organizer/
+    ├── ai/                       # ✅ IMPLÉMENTÉ
+    │   ├── LlmClient.kt
+    │   ├── PlaylistAgent.kt
+    │   ├── SqlGenerationAgent.kt
+    │   ├── MaintenanceAgent.kt
+    │   ├── PlaySmartTask.kt      # ✅ VLC integration
+    │   ├── PlayArtistTask.kt
+    │   └── PlayGenreTask.kt
+    ├── playlist/
+    │   └── XspfGenerator.kt      # ✅ Format VLC
+    ├── database/
+    │   ├── Database.kt           # ✅ PostgreSQL R2DBC
+    │   └── DatabaseExtension.kt
+    └── Models.kt
+```
+
+=== plantuml-gradle (Référence Architecture)
+
+```
+plantuml-gradle/
+├── build.gradle.kts
+├── gradle/
+│   └── libs.versions.toml
+└── plantuml-plugin/
+    ├── settings.gradle.kts
+    └── src/main/kotlin/plantuml/
+        ├── PlantumlPlugin.kt
+        ├── PlantumlConfig.kt     # ✅ Config YAML + properties
+        ├── ConfigLoader.kt
+        ├── ConfigMerger.kt
+        └── service/
+            ├── LlmService.kt     # ✅ Pattern LLM
+            └── DiagramProcessor.kt
+```
+
+=== Patterns à Réutiliser depuis plantuml-gradle
+- `PlantumlConfig.kt` : Configuration YAML + properties CLI
+- `ConfigLoader.kt` : Chargement de configuration
+- `ConfigMerger.kt` : Fusion de configurations multiples
+- `LlmService.kt` : Abstraction LLM
+
+== BuildSrc vs Approche Traditionnelle
+
+=== Avant (build.gradle.kts monolithique)
+```kotlin
+// 80+ lignes, mélange config et logique
+tasks.register("downloadMusic") {
+    doLast {
+        val url = project.findProperty("url") as String?  // Pas type safety
+        // 50 lignes de code procédural, pas réutilisable, difficile à tester
+    }
+}
+```
+
+=== Maintenant (architecture séparée)
+```kotlin
+// build.gradle.kts racine : 9 lignes de configuration pure
+// buildSrc/ : logique métier, tâches typées, plugins réutilisables
+// ✅ Type safety, testable, auto-complétion IDE, réutilisable
+```
+
+=== Workflow de Compilation
+```
+1. Gradle démarre
+2. Compile buildSrc/ EN PREMIER (dépendances, classes Kotlin, plugin)
+3. Applique build.gradle.kts (charge plugin, enregistre tâches)
+4. Exécution : ./gradlew downloadMusic --url="..."
+```
+
+=== Extensions Possibles
+- Nouvelles tâches : `DownloadPlaylistTask`, `GeneratePlaylistTask`
+- DSL personnalisé : `youtubeDownloader { defaultBitrate = "320k" }`
+- Publication du plugin : Gradle Plugin Portal
+- Retry automatique avec backoff exponentiel
+- Validation d'URL YouTube
+
+=== Métriques Build
+| Aspect | Sans buildSrc | Avec buildSrc |
+|--------|---------------|---------------|
+| Premier build | ~30s | ~35s |
+| Builds suivants | ~5s | ~5s |
+| Temps de dev | Lent | Rapide (IDE) |
+| Maintenabilité | Faible | Élevée |
+| Réutilisabilité | Nulle | Totale |
+| Testabilité | Impossible | Facile |
+
+== Personnalisation (Customization.md)
+
+=== Bitrate MP3
+`Mp3Converter.kt` : `converter.convertToMp3(tempFile, mp3File, bitrate = "320k")`
+Options : `"128k"` · `"192k"` (défaut) · `"256k"` · `"320k"` (max)
+
+=== Dossier de Sortie par Défaut
+`DownloaderPlugin.kt` : `outputPath = "${System.getProperty("user.home")}/Music/YouTube"`
+
+=== Métadonnées ID3
+```kotlin
+tag.setField(FieldKey.ALBUM, "Ma Collection YouTube")
+tag.setField(FieldKey.GENRE, "Downloaded")
+tag.setField(FieldKey.COMMENT, "Téléchargé depuis YouTube")
+tag.setField(FieldKey.COMPOSER, artist)
+```
+
+=== Format Nom de Fichier
+```kotlin
+// Défaut : "Titre.mp3"
+// Artiste - Titre : "${artist} - ${sanitizedTitle}.mp3"
+// Date - Titre : "${LocalDate.now()} - ${sanitizedTitle}.mp3"
+```
+
+=== Proxy HTTP
+```kotlin
+private val client = OkHttpClient.Builder()
+    .proxy(Proxy(Proxy.Type.HTTP, InetSocketAddress("proxy.example.com", 8080)))
+    .build()
+```
+
+=== Timeouts
+```kotlin
+.readTimeout(60, TimeUnit.SECONDS)
+.connectTimeout(30, TimeUnit.SECONDS)
+```
+
+=== DSL Personnalisé (avancé)
+Ajouter une extension pour configurer le plugin depuis `build.gradle.kts` :
+```kotlin
+// NewpipeExtension.kt
+open class YouTubeExtension {
+    var defaultBitrate: String  = "192k"
+    var defaultOutput:  String  = "downloads"
+}
+
+// Dans DownloaderPlugin.kt
+val ext = project.extensions.create("youtubeDownloader", YouTubeExtension::class.java)
+project.tasks.register("downloadMusic", DownloadMusicTask::class.java) {
+    outputPath = ext.defaultOutput
+}
+```
+Puis dans `build.gradle.kts` :
+```kotlin
+youtubeDownloader {
+    defaultBitrate = "320k"
+    defaultOutput  = "/home/user/Music"
+}
+```
+
+=== Retry Automatique avec Backoff Exponentiel
+```kotlin
+// Dans DownloadMusicTask.kt
+suspend fun downloadWithRetry(url: String, maxRetries: Int = 3): File {
+    repeat(maxRetries) { attempt ->
+        try {
+            return downloader.downloadAudio(...)
+        } catch (e: Exception) {
+            if (attempt == maxRetries - 1) throw e
+            logger.warn("Tentative ${attempt + 1} échouée, nouvelle tentative...")
+            delay(1000L * (attempt + 1))
+        }
+    }
+    error("Unreachable")
+}
+```
+
+=== Validation d'URL YouTube
+```kotlin
+private fun isValidYouTubeUrl(url: String): Boolean =
+    Regex("""^https?://(www\.)?(youtube\.com/watch\?v=|youtu\.be/)[a-zA-Z0-9_\-]{11}.*""")
+        .matches(url)
+
+// Dans download()
+if (!isValidYouTubeUrl(url))
+    throw GradleException("URL YouTube invalide : $url")
+```
+
+=== Ajouter une Nouvelle Tâche Gradle
+. Créer `DownloadPlaylistTask.kt` avec `@TaskAction`
+. L'enregistrer dans `DownloaderPlugin.kt` : `project.tasks.register("downloadPlaylist", DownloadPlaylistTask::class.java)`
+. Utiliser : `./gradlew downloadPlaylist --playlist-url="URL"`
+
+== Sécurité
+
+```bash
+# NE JAMAIS COMMIT
+git update-index --assume-unchanged sessions.yml
+git update-index --assume-unchanged client_secrets/*.json
+echo "client_secrets" >> .gitignore
+git check-ignore client_secrets/
+```
+
+== Métriques du Projet (avril 2026)
+
+- *Langage* : Kotlin 2.3.20
+- *Build* : Gradle 9.4.1
+- *Lignes de code* : ~6500 (newpipe-plugin, newpipe)
+- *Tests unitaires* : 80+ (100% passants)
+- *Tâches Gradle* : 6 custom
+- *Fichiers Kotlin* : 25+
+- *Temps de build* : ~45s
+- *Couverture* : à mesurer
+- *EPICs* : 2 (Download Auth 100%, LLM Integration en attente)
+- *US totales* : 9 (42 points)
+- *Backlog* : 100% COMPLET (avril 2026)
+
+== Dépendances au Modèle IA
+
+DeepSeek-V4-Pro a été sélectionné après 13 sessions de test comparatif face à Kimi K2.6 et GLM-5.1 :
+- *Kimi K2.6* : MLA pur, dégrade au-delà de 60K tokens, hallucinations massives → abandonné après 2 sessions
+- *GLM-5.1* : MLA + DSA, solide jusqu'à ~120K, mais confusions de surface (nommage) → abandonné après 3 sessions
+- *DeepSeek-V4-Pro* : CSA+HCA hybride, stable jusqu'à 128K, taux de correction <5% → adopté
