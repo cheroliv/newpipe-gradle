@@ -28,6 +28,8 @@ Ce fichier définit les métriques d'une session idéale et les signes qu'il fau
 
 *Mieux vaut 5 sessions de 20 minutes qu'une session de 2 heures avec debugging chaos.*
 
+🔑 *RAPPEL ÉPISTÉMIQUE* : Avant de diluer une progression dans les docs ou le blog → classifier VISION/OPINION/STRATÉGIE (AGENT_GOVERNANCE Règle 2bis). Opinion → Cercle 0 uniquement. Stratégie → pas de blog.
+
 == Début de Session
 
 *Startup prompt* (envoyé automatiquement au début de session par l'utilisateur) :
