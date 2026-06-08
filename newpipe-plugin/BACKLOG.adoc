@@ -1,0 +1,45 @@
+= Backlog — NewPipe Plugin (Nashville 🎶)
+:description: Backlog de publication Maven Central — EPIC PUB
+:date: 2026-06-08
+:toc: left
+:sectnums:
+
+_Source : configuration/EPIC_PUB.adoc (Session 096)_
+
+'''
+== EPIC PUB — Publication Maven Central
+
+=== PUB-2.2 — Mettre a jour le commentaire relocation
+
+Dans le `build.gradle.kts`, remplacer :
+
+[source,kotlin]
+----
+// RELOCATION : prepare la migration du groupId education.cccp →
+// <futur-domaine>. Activer avec -Prem relocationGroup="io.github.cccp-education"
+// Effet : injecte <distributionManagement><relocation><groupId>...</groupId></relocation>
+// dans le POM publie. Les consommateurs existants seront rediriges automatiquement
+// vers le nouveau groupId lors de la prochaine maj de dependance.
+----
+
+Par :
+
+[source,kotlin]
+----
+// RELOCATION : garde comme echappatoire future.
+// Activable avec -Prem relocationGroup="<futur-namespace>"
+----
+
+=== PUB-3.15 — Publier newpipe-plugin
+
+*Artefact* : `education.cccp.newpipe` + `education.cccp:newpipe-plugin`
+
+```bash
+cd newpipe-plugin && ./gradlew :newpipe:publish closeAndRelease
+```
+
+=== PUB-5.15 — Verification
+
+| Artefact | URL |
+|---|---|
+| newpipe-plugin | https://central.sonatype.com/artifact/education.cccp/newpipe-plugin |
